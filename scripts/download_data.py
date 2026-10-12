@@ -44,6 +44,8 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
+import cv2
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 REGISTRY_DIR = DATA_DIR / "registry"
@@ -143,28 +145,78 @@ def log(msg: str) -> None:
     print(f"[{_dt.datetime.now():%H:%M:%S}] {msg}", flush=True)
 
 
-def safe_extract(archive: Path, dest: Path) -> None:
-    """Extract an archive, refusing any member that escapes `dest`."""
+def _is_within(child: Path, parent: Path) -> bool:
+    """True if `child` is inside `parent`.
+
+    Uses Path.relative_to rather than a string prefix test: the naive
+    `str(child).startswith(str(parent))` form wrongly accepts sibling paths that
+    merely share a prefix (e.g. /data/MFNet_evil vs /data/MFNet).
+    """
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _members_of(archive: Path) -> list[str]:
+    if archive.suffix.lower() in (".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".tar.gz"):
+        if archive.suffix.lower() == ".zip":
+            with zipfile.ZipFile(archive) as zf:
+                return zf.namelist()
+        with tarfile.open(archive) as tf:
+            return tf.getnames()
+    raise ValueError(f"unsupported archive type: {archive.name}")
+
+
+def safe_extract(archive: Path, dest: Path) -> int:
+    """Extract an archive, refusing any member that escapes `dest`.
+
+    Returns the number of members extracted, which the caller uses to detect a
+    truncated or partially-downloaded archive: gdown can exit 0 after fetching
+    only part of a folder, and an extraction that yields 0 members must not be
+    mistaken for a successful acquisition.
+
+    Traversal is checked with Path.relative_to, and absolute members, links and
+    devices are refused outright (Python's tar filter="data" handles this too,
+    but the check happens first so the failure message names the member).
+    """
     dest.mkdir(parents=True, exist_ok=True)
-    dest_resolved = dest.resolve()
+
     if archive.suffix.lower() == ".zip":
         with zipfile.ZipFile(archive) as zf:
+            bad = zf.testzip()
+            if bad is not None:
+                raise RuntimeError(
+                    f"zip archive is corrupt: first bad member is {bad!r} "
+                    f"(the download was likely truncated)"
+                )
             for m in zf.infolist():
-                target = (dest / m.filename).resolve()
-                if not str(target).startswith(str(dest_resolved)):
+                if not _is_within(dest / m.filename, dest):
                     raise RuntimeError(f"refusing unsafe zip member: {m.filename}")
+            count = len(zf.infolist())
             zf.extractall(dest)
-    else:
-        with tarfile.open(archive) as tf:
-            for m in tf.getmembers():
-                target = (dest / m.name).resolve()
-                if not str(target).startswith(str(dest_resolved)):
-                    raise RuntimeError(f"refusing unsafe tar member: {m.name}")
-            # filter="data" avoids the Windows symlink/permission pitfalls
-            try:
-                tf.extractall(dest, filter="data")  # type: ignore[call-arg]
-            except TypeError:  # Python < 3.12
-                tf.extractall(dest)
+        return count
+
+    with tarfile.open(archive) as tf:
+        members = tf.getmembers()
+        for m in members:
+            if not _is_within(dest / m.name, dest):
+                raise RuntimeError(f"refusing unsafe tar member: {m.name}")
+            if m.issym() or m.islnk() or m.isdev():
+                raise RuntimeError(f"refusing link/device tar member: {m.name}")
+        # filter="data" additionally strips absolute paths, setuid bits and
+        # non-regular files; on Python < 3.12 we do our own checks above.
+        try:
+            tf.extractall(dest, filter="data")  # type: ignore[call-arg]
+        except TypeError:  # Python < 3.12
+            tf.extractall(dest)
+    return len(members)
+
+
+def archive_member_count(archive: Path) -> int:
+    """How many members the archive claims to contain (no extraction)."""
+    return len(_members_of(archive))
 
 
 def find_pair_dirs(root: Path) -> list[tuple[Path, Path]]:
@@ -195,13 +247,64 @@ def list_images(d: Path) -> list[str]:
 
 
 def pair_up(ir_dir: Path, vi_dir: Path) -> tuple[list[str], list[str]]:
-    """Return (paired_ids, unpaired_left). Pairs are matched on exact filename."""
+    """Return (paired_ids, unpaired_left).
+
+    Pairs are matched on filename *stem* rather than full filename. Both
+    directories must be equally strict about extensions, but a dataset that
+    stores infrared as .png and visible as .jpg (or vice versa) is common enough
+    that matching on the exact name would silently yield zero pairs and then be
+    reported as "corrupt" -- a misleading diagnosis. Stem matching pairs what is
+    actually a pair and reports the extension mismatch as unpaired leftovers,
+    which is the honest outcome.
+    """
     ir = list_images(ir_dir)
     vi = list_images(vi_dir)
-    ir_set, vi_set = set(ir), set(vi)
-    pairs = sorted(ir_set & vi_set)
-    leftover = sorted((ir_set | vi_set) - set(pairs))
-    return pairs, leftover
+
+    def by_stem(names: list[str]) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for n in names:
+            out.setdefault(Path(n).stem, n)
+        return out
+
+    ir_map, vi_map = by_stem(ir), by_stem(vi)
+    pairs = sorted((k, ir_map[k], vi_map[k]) for k in ir_map.keys() & vi_map.keys())
+
+    # a pair is only usable if the two files have the same pixel dimensions;
+    # a mis-dimensioned pair would be silently cropped at load time, which
+    # would corrupt the alignment the fusion task depends on
+    validated: list[tuple[str, str, str]] = []
+    mismatched: list[str] = []
+    for stem, ir_name, vi_name in pairs:
+        try:
+            ir_img = cv2.imread(str(ir_dir / ir_name), cv2.IMREAD_UNCHANGED)
+            vi_img = cv2.imread(str(vi_dir / vi_name), cv2.IMREAD_UNCHANGED)
+        except Exception:  # noqa: BLE001
+            mismatched.append(stem)
+            continue
+        if ir_img is None or vi_img is None:
+            mismatched.append(stem)
+            continue
+        if ir_img.shape[:2] != vi_img.shape[:2]:
+            mismatched.append(stem)
+            continue
+        validated.append((stem, ir_name, vi_name))
+
+    leftover = sorted(
+        (set(ir) | set(vi))
+        - {ir_name for _, ir_name, _ in validated}
+        - {vi_name for _, _, vi_name in validated}
+    )
+    if mismatched:
+        log(
+            f"  warning: {len(mismatched)} pairs rejected for unreadable or "
+            f"size-mismatched IR/VI, e.g. {mismatched[:5]}"
+        )
+    return validated, leftover
+
+
+def file_digest(path: Path, chunk: int = 1 << 20) -> str:
+    """SHA-256 of a single file's bytes."""
+    return sha256_file(path, chunk)
 
 
 def manifest_hash(entries: Iterable[str]) -> str:
@@ -210,6 +313,64 @@ def manifest_hash(entries: Iterable[str]) -> str:
         h.update(e.encode())
         h.update(b"\n")
     return h.hexdigest()
+
+
+def audit_dataset(root: Path) -> dict:
+    """Audit a laid-out dataset: loadability, dimension agreement, channel counts.
+
+    This is the gate that stands between "files were downloaded" and "these files
+    are a usable, aligned IR/VI corpus". It is deterministic given the same tree,
+    so its output is stored in the registry and re-checkable via --verify-only.
+
+    Returns a dict; `problems` is non-empty if anything is inconsistent.
+    """
+    problems: list[str] = []
+    dims: dict[str, int] = {}
+    ir_ch: dict[int, int] = {}
+    vi_ch: dict[int, int] = {}
+    n_pairs = 0
+
+    for split in sorted(p.name for p in root.iterdir() if p.is_dir()):
+        ir_d, vi_d = root / split / "ir", root / split / "vi"
+        if not (ir_d.is_dir() and vi_d.is_dir()):
+            problems.append(f"{split}: missing ir/ or vi/ directory")
+            continue
+        ir_names = set(list_images(ir_d))
+        vi_names = set(list_images(vi_d))
+        if ir_names != vi_names:
+            problems.append(
+                f"{split}: {len(ir_names - vi_names)} ir-only, "
+                f"{len(vi_names - ir_names)} vi-only files"
+            )
+        for name in sorted(ir_names & vi_names):
+            ir_img = cv2.imread(str(ir_d / name), cv2.IMREAD_UNCHANGED)
+            vi_img = cv2.imread(str(vi_d / name), cv2.IMREAD_UNCHANGED)
+            if ir_img is None or vi_img is None:
+                problems.append(f"{split}/{name}: unreadable")
+                continue
+            if ir_img.shape[:2] != vi_img.shape[:2]:
+                problems.append(
+                    f"{split}/{name}: dimension mismatch "
+                    f"ir={ir_img.shape[:2]} vi={vi_img.shape[:2]}"
+                )
+                continue
+            n_pairs += 1
+            dims[f"{ir_img.shape[1]}x{ir_img.shape[0]}"] = dims.get(
+                f"{ir_img.shape[1]}x{ir_img.shape[0]}", 0
+            ) + 1
+            c_ir = 1 if ir_img.ndim == 2 else ir_img.shape[2]
+            c_vi = 1 if vi_img.ndim == 2 else vi_img.shape[2]
+            ir_ch[c_ir] = ir_ch.get(c_ir, 0) + 1
+            vi_ch[c_vi] = vi_ch.get(c_vi, 0) + 1
+
+    return {
+        "n_pairs": n_pairs,
+        "unique_dims": dims,
+        "ir_channels": ir_ch,
+        "vi_channels": vi_ch,
+        "problems": problems[:50],
+        "n_problems": len(problems),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -356,7 +517,13 @@ def attempt_mfnet(timeout_min: float = 10.0, force: bool = False) -> dict:
         src = local[0]
         log(f"MFNet: using manually-provided archive {src}")
         try:
-            safe_extract(src, out_root)
+            n_members = safe_extract(src, out_root)
+            log(f"  extracted {n_members} members ({src.stat().st_size / 2**20:.1f} MB)")
+            if n_members == 0:
+                raise RuntimeError(
+                    "archive contained no members -- it is empty or was not fully "
+                    "downloaded"
+                )
             downloaded_archive = src
             attempts.append(
                 {
@@ -440,32 +607,63 @@ def attempt_mfnet(timeout_min: float = 10.0, force: bool = False) -> dict:
         return record
 
     canonical = out_root / "canonical"
-    (canonical / "ir").mkdir(parents=True, exist_ok=True)
-    (canonical / "vi").mkdir(parents=True, exist_ok=True)
+    for split_name in ("train", "val"):
+        for mod in ("ir", "vi"):
+            (canonical / split_name / mod).mkdir(parents=True, exist_ok=True)
+
     seen: set[str] = set()
+    n_rejected = 0
     for ir_dir, vi_dir in pair_dirs:
         pairs, leftover = pair_up(ir_dir, vi_dir)
         if leftover:
             log(f"  warning: {ir_dir.name}/{vi_dir.name}: {len(leftover)} unpaired files")
-        for pid in pairs:
-            if pid in seen:
+        for stem, ir_name, vi_name in pairs:
+            if stem in seen:
+                # same scene id appearing in two subset dirs (e.g. day/ and
+                # night/) -- keep the first occurrence so the pair set is stable
+                n_rejected += 1
                 continue
-            seen.add(pid)
-            shutil.copy2(ir_dir / pid, canonical / "ir" / pid)
-            shutil.copy2(vi_dir / pid, canonical / "vi" / pid)
-    log(f"  {len(seen)} unique pairs collected")
+            seen.add(stem)
+            shutil.copy2(ir_dir / ir_name, canonical / "ir" / f"{stem}.png")
+            shutil.copy2(vi_dir / vi_name, canonical / "vi" / f"{stem}.png")
+    log(f"  {len(seen)} unique pairs collected"
+        + (f" ({n_rejected} duplicate ids skipped)" if n_rejected else ""))
+    if not seen:
+        raise RuntimeError(
+            "no validated IR/VI pairs found after dimension checking; "
+            "refusing to register an empty dataset"
+        )
 
-    pairs = sorted(p.name for p in (canonical / "ir").iterdir())
+    pairs = sorted(seen)
     splits = build_hashesplit(pairs)
     for split_name, ids in splits.items():
         d = canonical / split_name
-        (d / "ir").mkdir(parents=True, exist_ok=True)
-        (d / "vi").mkdir(parents=True, exist_ok=True)
         for pid in ids:
-            shutil.copy2(canonical / "ir" / pid, d / "ir" / pid)
-            shutil.copy2(canonical / "vi" / pid, d / "vi" / pid)
+            name = f"{pid}.png"
+            shutil.move(str(canonical / "ir" / name), str(d / "ir" / name))
+            shutil.move(str(canonical / "vi" / name), str(d / "vi" / name))
+    for mod in ("ir", "vi"):
+        stale = sorted(p for p in (canonical / mod).iterdir() if p.is_file())
+        if stale:
+            raise RuntimeError(
+                f"{len(stale)} files left unsplit in {mod}/ -- split logic and "
+                f"pair set disagree; refusing to register"
+            )
 
     entries = [f"{s}/{pid}" for s, ids in splits.items() for pid in ids]
+
+    # --- image-content audit ------------------------------------------- #
+    # Every registered pair must be loadable and share pixel dimensions. This is
+    # re-checkable later via `download_data.py --verify-only`, which recomputes it.
+    audit = audit_dataset(canonical)
+    if audit["n_pairs"] == 0:
+        raise RuntimeError(f"registered dataset has no loadable pairs: {audit}")
+    log(
+        f"  audit: {audit['n_pairs']} pairs, dims="
+        f"{audit['unique_dims']}, ir_channels={audit['ir_channels']}, "
+        f"vi_channels={audit['vi_channels']}"
+    )
+
     record = {
         "dataset_id": "MFNet",
         "status": "ok",
@@ -475,6 +673,10 @@ def attempt_mfnet(timeout_min: float = 10.0, force: bool = False) -> dict:
         "archive_sha256": (
             sha256_file(downloaded_archive) if downloaded_archive else None
         ),
+        "archive_bytes": (
+            downloaded_archive.stat().st_size if downloaded_archive else None
+        ),
+        "audit": audit,
         "root": str(canonical),
         "split_definition": (
             "sha1(pair_id) -> uint32/first 8 hex digits, ascending; the lowest 20% "
@@ -522,10 +724,8 @@ def verify(record_path: Path) -> int:
             return 1
         log(f"  ok {split}: {n_ir} pairs")
 
-    # leakage check: no pair id appears in both splits
-    all_ids = {
-        split: set(list_images(root / split / "ir")) for split in splits
-    }
+    # Split-partition leakage: no pair id may appear in two splits.
+    all_ids = {split: set(list_images(root / split / "ir")) for split in splits}
     names = sorted(all_ids)
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
@@ -535,6 +735,19 @@ def verify(record_path: Path) -> int:
                 return 1
     log("  ok no train/val leakage")
 
+    # Content-level leakage. Two different pair ids can still be the *same
+    # picture* -- MFNet has day/night subsets and near-duplicate frames, so an
+    # identical (or near-identical) infrared image can end up on both sides.
+    # That is the failure that silently inflates every metric, so it is checked
+    # directly on pixel content rather than assumed absent.
+    dup = find_content_duplicates(root, splits)
+    if dup:
+        log(f"  FAIL: {len(dup)} pairs share identical IR content across splits")
+        for d in dup[:5]:
+            log(f"        {d['ir']} == {d['other']}")
+        return 1
+    log("  ok no cross-split IR content duplicates")
+
     entries = [f"{s}/{pid}" for s, ids in all_ids.items() for pid in sorted(ids)]
     recomputed = manifest_hash(entries)
     if recomputed != rec.get("manifest_sha256"):
@@ -542,7 +755,52 @@ def verify(record_path: Path) -> int:
             f"registry={str(rec.get('manifest_sha256'))[:12]})")
         return 1
     log("  ok manifest hash matches registry")
+
+    # Re-run the content audit and compare with what was recorded at
+    # acquisition. This catches on-disk corruption or later edits.
+    audit = audit_dataset(root)
+    recorded = rec.get("audit")
+    if recorded:
+        if audit["n_pairs"] != recorded.get("n_pairs"):
+            log(f"  FAIL: audit pair count changed "
+                f"(registry={recorded.get('n_pairs')} disk={audit['n_pairs']})")
+            return 1
+        if audit["n_problems"]:
+            log(f"  FAIL: audit found {audit['n_problems']} problem(s): "
+                f"{audit['problems'][:3]}")
+            return 1
+        log(f"  ok content audit clean ({audit['n_pairs']} loadable pairs)")
     return 0
+
+
+def find_content_duplicates(root: Path, splits: dict[str, int]) -> list[dict[str, str]]:
+    """Pairs in different splits whose infrared image is byte-identical.
+
+    Uses a per-file SHA-256 rather than a perceptual hash: byte equality is
+    unambiguous, cheap, and cannot produce a false accusation. Near-duplicates
+    are *not* reported here, because a perceptual hash threshold would itself be
+    an arbitrary, hard-to-defend choice; docs/DATASET.md records this limitation
+    instead of hiding it.
+    """
+    by_split: dict[str, dict[str, str]] = {}
+    for split in splits:
+        digests: dict[str, str] = {}
+        for name in sorted(list_images(root / split / "ir")):
+            try:
+                digests[file_digest(root / split / "ir" / name)] = f"{split}/{name}"
+            except OSError:
+                continue
+        by_split[split] = digests
+
+    out: list[dict[str, str]] = []
+    keys = sorted(by_split)
+    for i in range(len(keys)):
+        for j in range(i + 1, len(keys)):
+            a, b = by_split[keys[i]], by_split[keys[j]]
+            shared = set(a) & set(b)
+            for h in sorted(shared):
+                out.append({"ir": a[h], "other": b[h]})
+    return out
 
 
 def main() -> int:

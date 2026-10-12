@@ -1,14 +1,14 @@
 {
   "dataset_id": "MFNet",
   "status": "unavailable",
-  "retrieved_at": "2026-10-12T16:51:02Z",
+  "retrieved_at": "2026-10-12T17:43:17Z",
   "licence": "MFNet: Multispectral image dataset for RGBT detection (Takdir et al., U-Tokyo, RIKEN AIP). Research use; cite the original paper and the U-Tokyo project page. Redistribution is not granted by this repository.",
   "attempts": [
     {
       "kind": "gdrive_folder",
       "url": "https://drive.google.com/drive/folders/1YtEMiUC8sC0iL9rONNv96n5jWuIsWrVY",
       "note": "U-Tokyo official MFNet object-detection release (ir_det_dataset.tar.gz, file id 0B7Loi-7ye3pPY1dRalliazlQMDg). Preferred transport.",
-      "attempted_at": "2026-10-12T16:49:53Z",
+      "attempted_at": "2026-10-12T17:42:10Z",
       "downloaded": false,
       "result": "RuntimeError: gdown exited with code 1"
     },
@@ -16,7 +16,7 @@
       "kind": "gdrive_folder",
       "url": "https://drive.google.com/drive/folders/18BQFWRfhXzSuMloUmtiBRFrr6NSrf8Fw",
       "note": "MFNet semantic-segmentation release linked from Linfeng-Tang/SeAFusion README. Secondary transport.",
-      "attempted_at": "2026-10-12T16:49:57Z",
+      "attempted_at": "2026-10-12T17:42:14Z",
       "downloaded": false,
       "result": "RuntimeError: gdown exited with code 1"
     }

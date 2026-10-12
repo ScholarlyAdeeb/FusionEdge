@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -61,6 +62,55 @@ def fuse_pair(
     return tensor_to_uint8(fused)
 
 
+def load_model(
+    weights: str | Path,
+    model_name: str,
+    model_cfg: dict | None,
+    device: str = "cuda",
+) -> torch.nn.Module:
+    model = build_model(model_name, model_cfg or {})
+    load_model_weights(model, weights, device=device)
+    return model.to(device).eval()
+
+
+def is_trained(weights: str | Path) -> tuple[bool, str]:
+    """Whether a checkpoint looks trained, and why.
+
+    An untrained FusionEdge returns the visible image almost exactly (its output
+    head is zero-initialised). Fusing with it therefore produces a plausible,
+    reasonable-looking picture that contains no infrared information at all. That
+    is the most dangerous failure mode in this project: a user runs inference on
+    real pairs, sees a fine image, and concludes the model works.
+
+    So checkpoints are labelled. `trainer_state` is written by the Trainer; a
+    checkpoint without it, or with all-zero output-head weights, is reported as
+    untrained. This is a heuristic on the weights, not proof of training quality
+    -- it says "you probably have not trained this", not "this model is good".
+    """
+    path = Path(weights)
+    if not path.exists():
+        return False, f"checkpoint does not exist: {path}"
+    try:
+        payload = torch.load(path, map_location="cpu", weights_only=False)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"checkpoint could not be read: {exc}"
+
+    if "model_state" not in payload:
+        return False, "checkpoint has no 'model_state' -- not a FusionEdge checkpoint"
+    state = payload["model_state"]
+    head_key = next((k for k in state if k.endswith("head.weight")), None)
+    if head_key is None:
+        return False, "no output head found in state_dict"
+    if torch.count_nonzero(state[head_key]) == 0:
+        return (
+            False,
+            "output head is all-zero -- this is the untrained initialisation, and "
+            "fusing with it returns the visible image unchanged",
+        )
+    epochs = payload.get("epoch", 0)
+    return True, f"output head is non-zero; checkpoint reports epoch={epochs}"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ir", required=True)
@@ -70,16 +120,41 @@ def main() -> int:
     ap.add_argument("--model-cfg", default="{}")
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument(
+        "--allow-untrained",
+        action="store_true",
+        help="proceed even if the checkpoint looks untrained (for smoke tests only)",
+    )
     args = ap.parse_args()
+
+    trained, reason = is_trained(args.weights)
+    if not trained:
+        print(f"REFUSING to fuse: {reason}", file=sys.stderr)
+        print(
+            "\nAn untrained model returns the visible image, which looks like a "
+            "plausible fusion but contains no infrared information.\n"
+            "Train first (python scripts/run_experiment.py --config configs/"
+            "fusionedge.yaml), or pass --allow-untrained for a plumbing test.",
+            file=sys.stderr,
+        )
+        if not args.allow_untrained:
+            return 2
 
     import cv2
 
     model = load_model(args.weights, args.model, json.loads(args.model_cfg), args.device)
     fused = fuse_pair(model, args.ir, args.vi, device=args.device)
+
+    # How different is the output from the visible input? If the model is barely
+    # using the infrared channel the answer is ~0 and that is worth knowing.
+    delta = np.abs(
+        fused.astype(np.float64) - cv2.cvtColor(cv2.imread(args.vi), cv2.COLOR_BGR2RGB)
+    ).mean()
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(out), cv2.cvtColor(fused, cv2.COLOR_RGB2BGR))
     print(f"wrote {out} {fused.shape}")
+    print(f"mean |fused - visible| = {delta:.2f} (0.0 means no infrared contribution)")
     return 0
 
 
