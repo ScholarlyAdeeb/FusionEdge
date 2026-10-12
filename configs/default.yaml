@@ -44,6 +44,15 @@ train:
   eval_max_images: null   # set to an int to cap evaluation cost on long runs
   best_metric: MS_SSIM_ir # the ONE metric `best.pt` is selected on
 
+  # Progress bar: auto | always | never
+  #   auto   - show only when stderr is an interactive terminal (default).
+  #            Background/CI runs stay quiet so log.txt has no escape codes.
+  #   always - force the bar even when redirected.
+  #   never  - never show it.
+  # To watch a run, either run it in your own terminal (auto works), or set
+  # `progress: always` here / pass --set train.progress=always.
+  progress: auto
+
 loss:
   w_intensity: 8.0
   w_gradient: 10.0

@@ -1,4 +1,4 @@
-run_name: baseline_simplecnn
+run_name: baseline_simplecnn_v2_sigmoid
 seed: 1234
 deterministic: true
 device: cuda
@@ -12,13 +12,13 @@ model:
     width: 32
     depth: 4
 data:
-  batch_size: 2
-  num_workers: 0
+  batch_size: 8
+  num_workers: 4
   crop: 128
-  limit_train: 8
-  limit_eval: 4
+  limit_train: null
+  limit_eval: null
 train:
-  epochs: 1
+  epochs: 60
   lr: 0.0001
   optimizer: adam
   weight_decay: 0.0
@@ -26,8 +26,8 @@ train:
   eta_min: 1.0e-06
   grad_clip: 1.0
   amp: true
-  eval_every: 1
-  eval_max_images: 4
+  eval_every: 2
+  eval_max_images: null
   best_metric: MS_SSIM_ir
 loss:
   w_intensity: 8.0
@@ -47,10 +47,10 @@ benchmark:
   dtype: float32
 _config_path: configs\baseline.yaml
 _stamped:
-  at: '2026-10-12T18:21:43Z'
-  git_commit: bcb5f56451d7bda8d9bb751a760e514ac03de4d5
+  at: '2026-10-12T18:36:03Z'
+  git_commit: a4022f08b2f59fa1429e8f683daea9a7caaf0546
   environment:
-    python: '20261012'
+    python: '20261013'
     torch: 2.12.1+cu126
     cuda_available: true
     cuda: '12.6'
@@ -60,9 +60,6 @@ _stamped:
   - scripts/run_experiment.py
   - --config
   - configs/baseline.yaml
-  - --smoke
-  - --set
-  - train.epochs=1
   dataset_id: MSRS
   dataset_status: ok
   dataset_manifest_sha256: e5f03de8da4a87cb94a56547aadb90e35eb12d808eddd1a77bd16706d7d28eb7

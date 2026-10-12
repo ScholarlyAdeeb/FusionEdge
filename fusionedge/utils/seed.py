@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import random
+from typing import Callable
 
 import numpy as np
 import torch
@@ -55,12 +56,29 @@ def seed_worker(worker_id: int) -> None:
     random.seed(base + worker_id)
 
 
-def worker_init_fn(worker_init) -> object:
-    """Adapter returning a picklable zero-arg callable for DataLoader."""
+class WorkerInitializer:
+    """Picklable DataLoader `worker_init_fn`.
 
-    def _init(worker_id: int) -> None:
+    Must be a module-level *class*, not a closure. On Windows the multiprocessing
+    start method is `spawn`, which pickles `worker_init_fn` before sending it to
+    the worker process; a nested function has no importable identity and raises
+    `PicklingError: Can't pickle local object worker_init_fn.<locals>._init`.
+    Only Linux with `fork` gets away with a closure, so a closure here would be a
+    platform-dependent failure that only shows up on Windows.
+    """
+
+    def __init__(self, fn: Callable[[int], None] | None = None):
+        self.fn = fn
+
+    def __call__(self, worker_id: int) -> None:
         seed_worker(worker_id)
-        if worker_init is not None:
-            worker_init(worker_id)
+        if self.fn is not None:
+            self.fn(worker_id)
 
-    return _init
+    def __repr__(self) -> str:  # keeps DataLoader reprs readable
+        return f"WorkerInitializer({self.fn!r})"
+
+
+def worker_init_fn(worker_init: Callable[[int], None] | None = None) -> WorkerInitializer:
+    """Return a picklable worker initializer."""
+    return WorkerInitializer(worker_init)

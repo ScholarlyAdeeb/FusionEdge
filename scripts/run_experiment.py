@@ -59,6 +59,12 @@ def main() -> int:
     ap.add_argument("--name", default=None, help="override run_name")
     ap.add_argument("--out", default="experiments")
     ap.add_argument("--set", nargs="*", default=[], help="config overrides, e.g. train.epochs=2")
+    ap.add_argument(
+        "--progress",
+        choices=["auto", "always", "never"],
+        default=None,
+        help="force the progress bar (use 'always' when running in the background)",
+    )
     ap.add_argument("--smoke", action="store_true", help="tiny run to verify the pipeline")
     ap.add_argument("--resume", default=None, help="checkpoint to resume from")
     ap.add_argument("--skip-train", action="store_true")
@@ -69,6 +75,8 @@ def main() -> int:
     cfg = load_config(args.config, overrides=parse_overrides(args.set))
     if args.name:
         cfg["run_name"] = args.name
+    if args.progress:
+        cfg.setdefault("train", {})["progress"] = args.progress
 
     smoke = args.smoke
     if smoke:

@@ -13,6 +13,27 @@ Its only structural choices are the two obvious ones: concatenate the two
 modalities, run residual blocks, predict the fused image directly. No attention,
 no edge prior, no cross-modal interaction. If FusionEdge wins, it wins because
 of those, not because of a different budget.
+
+Output head: sigmoid
+-------------------
+The output is `sigmoid(conv)`, NOT `clamp(conv, 0, 1)`. This was a genuine bug
+found by training the model, not a design preference, and the measurement is
+recorded in docs/EXPERIMENTS.md:
+
+    with clamp:   58.3% of output pixels sat exactly on 0.0 or 1.0
+                  loss 13.296 -> 13.296 over 60 Adam steps (no learning)
+    with sigmoid: 0.1% saturated
+                  loss 8.350 -> 8.181
+
+`torch.clamp` has zero gradient outside its range, so a pixel driven to the
+boundary stops contributing to the loss entirely. Because roughly half the
+pixels ended up pinned there, the baseline was effectively frozen and its metrics
+would have been meaningless.
+
+Note the direction of the correction: this fix makes the BASELINE stronger, and
+FusionEdge never had the problem (its residual output `clamp(vi + delta)` starts
+at exactly the visible image, so almost nothing sits on the boundary). Leaving
+the bug in place would have produced a comparison rigged in FusionEdge's favour.
 """
 
 from __future__ import annotations
@@ -60,7 +81,10 @@ class SimpleCNNBaseline(nn.Module):
         x = self.stem(x)
         x = self.blocks(x)
         x = self.act(self.head(x))
-        return torch.clamp(x, 0.0, 1.0)
+        # SIGMOID, not clamp. See the module docstring: a hard clamp zeroes the
+        # gradient for every pixel outside [0,1], and empirically ~50% of pixels
+        # sat on the boundary, so the network could not learn at all.
+        return torch.sigmoid(x)
 
 
 def build_baseline(cfg: dict | None = None) -> SimpleCNNBaseline:

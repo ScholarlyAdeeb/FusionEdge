@@ -30,6 +30,7 @@ from ..data import build_dataloaders
 from ..losses import FusionLoss
 from ..utils.checkpoint import load_checkpoint, save_checkpoint
 from ..utils.logger import RunLogger
+from ..utils.progress import ProgressBar, Timer
 from ..utils.registry import build_model
 from ..utils.seed import seed_everything
 from .evaluate import evaluate_model
@@ -52,17 +53,28 @@ def build_optimizer(model: nn.Module, cfg: dict) -> torch.optim.Optimizer:
 
 
 def build_scheduler(optimizer: torch.optim.Optimizer, cfg: dict, epochs: int):
+    """Build an LR scheduler stepped once per optimizer step.
+
+    `T_max` is therefore the total number of *optimizer steps* over training, not
+    the epoch count, so the cosine actually decays to `eta_min` by the last batch.
+    `steps_per_epoch` is passed in by the Trainer once the loader exists; when it
+    is unknown the scheduler falls back to an epoch-count estimate and the caller
+    is expected to rebuild it.
+    """
     name = str(cfg.get("scheduler", "cosine")).lower()
     if name in ("none", ""):
         return None
+    total_steps = int(epochs) * int(cfg.get("steps_per_epoch", 1))
+    total_steps = max(1, total_steps)
+
     if name == "cosine":
         return torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=epochs, eta_min=float(cfg.get("eta_min", 1e-6))
+            optimizer, T_max=total_steps, eta_min=float(cfg.get("eta_min", 1e-6))
         )
     if name == "step":
         return torch.optim.lr_scheduler.StepLR(
             optimizer,
-            step_size=int(cfg.get("step_size", max(1, epochs // 3))),
+            step_size=int(cfg.get("step_size", max(1, total_steps // 3))),
             gamma=float(cfg.get("gamma", 0.5)),
         )
     raise KeyError(f"unknown scheduler '{name}' (cosine | step | none)")
@@ -123,7 +135,10 @@ class Trainer:
             self.model = self.model.to(memory_format=torch.channels_last)
 
         self.loss_fn = FusionLoss(cfg.get("loss", {})).to(self.device)
-        tcfg = cfg.get("train", {})
+        tcfg = dict(cfg.get("train", {}))
+        # The LR schedule decays per optimizer step, so the scheduler needs the
+        # real step count -- which is only known now that the loader exists.
+        tcfg["steps_per_epoch"] = len(self.train_loader)
         self.tcfg = tcfg
         self.optimizer = build_optimizer(self.model, tcfg)
         self.scheduler = build_scheduler(self.optimizer, tcfg, int(tcfg.get("epochs", 100)))
@@ -131,6 +146,9 @@ class Trainer:
         self.scaler = torch.amp.GradScaler("cuda", enabled=self.amp)
         self.grad_clip = float(tcfg.get("grad_clip", 0.0) or 0.0)
         self.eval_every = int(tcfg.get("eval_every", 1))
+        self.total_epochs = int(tcfg.get("epochs", 100))
+        #: 'auto' (bar only on an interactive terminal), 'always', or 'never'
+        self.progress_mode = str(tcfg.get("progress", "auto"))
         #: the single metric `best.pt` is selected on -- declared, not chosen
         #: after the fact. Sign is applied so that "higher is better" always holds.
         self.best_key = str(tcfg.get("best_metric", "MS_SSIM_ir"))
@@ -183,13 +201,27 @@ class Trainer:
 
     def train_epoch(self, epoch: int) -> dict[str, float]:
         self.model.train()
-        t0 = time.time()
+        timer = Timer()
         agg: dict[str, float] = {}
         n = 0
+
+        total_steps = len(self.train_loader)
+        bar = ProgressBar(
+            total_steps,
+            desc=f"epoch {epoch + 1}/{self.total_epochs}",
+            mode=self.progress_mode,
+            leave=False,
+        )
 
         for i, batch in enumerate(self.train_loader):
             ir, vi = self._to_device(batch)
             self.optimizer.zero_grad(set_to_none=True)
+            # Step the LR schedule per optimizer step, not per epoch. Stepping it
+            # per epoch also triggers PyTorch's "scheduler.step() before
+            # optimizer.step()" warning on the first batch, and conflates the
+            # schedule with the epoch count.
+            if self.scheduler is not None:
+                self.scheduler.step()
 
             if self.amp:
                 with torch.autocast("cuda", dtype=torch.float16):
@@ -219,44 +251,67 @@ class Trainer:
             for k, v in parts.items():
                 agg[k] = agg.get(k, 0.0) + v.item() * bs
 
-            if self.device.type == "cuda" and (i + 1) % 50 == 0:
+            bar.update(1, loss=loss.item())
+            bar.set_lr(self.optimizer.param_groups[0]["lr"])
+
+            # The periodic log line is kept for the permanent record; when the
+            # progress bar is active it is redundant on screen but still written
+            # to log.txt, so a tailed log has the same information either way.
+            if (i + 1) % 50 == 0:
                 self.log.info(
-                    f"  epoch {epoch} | step {i + 1}/{len(self.train_loader)} | "
-                    f"loss {loss.item():.4f} | lr {self.optimizer.param_groups[0]['lr']:.2e}"
+                    f"  epoch {epoch + 1} | step {i + 1}/{total_steps} | "
+                    f"loss {loss.item():.4f} | lr "
+                    f"{self.optimizer.param_groups[0]['lr']:.2e}"
                 )
 
-        if self.scheduler is not None:
-            self.scheduler.step()
+        bar.close()
 
         out = {k: v / max(n, 1) for k, v in agg.items()}
-        out["epoch_time_s"] = round(time.time() - t0, 2)
+        out["epoch_time_s"] = round(timer.reset(), 2)
         return out
 
     # ------------------------------------------------------------------ #
     @torch.inference_mode()
     def validate(self, epoch: int) -> dict[str, Any]:
+        self.log.info(f"  [val] epoch {epoch + 1}/{self.total_epochs} ...")
+        eval_bar = ProgressBar(
+            len(self.val_loader),
+            desc=f"  val {epoch + 1}/{self.total_epochs}",
+            mode=self.progress_mode,
+            unit="img",
+            leave=False,
+        )
         res = evaluate_model(
             self.model,
             self.val_loader,
             device=self.device,
             amp=self.amp,
             max_images=self.tcfg.get("eval_max_images"),
+            # the eval loader runs at batch size 1, so one callback == one image
+            progress=lambda n, total: eval_bar.update(1),
         )
+        eval_bar.close()
         m = res["metrics"]
         self.log.info(
-            f"  [val] epoch {epoch}: "
+            f"  [val] epoch {epoch + 1}: "
             + " | ".join(f"{k}={v:.4f}" for k, v in sorted(m.items()))
         )
         return res
 
     def fit(self, resume_from: str | Path | None = None) -> TrainState:
-        epochs = int(self.tcfg.get("epochs", 100))
+        epochs = self.total_epochs
         if resume_from:
             self.load(resume_from)
             self.log.info(f"resumed from {resume_from} at epoch {self.state.epoch}")
 
         ckpt_dir = self.run_dir / "checkpoints"
         self.log.section(f"training for {epochs} epochs")
+        sweep_bar = ProgressBar(
+            epochs * len(self.train_loader),
+            desc="total",
+            mode=self.progress_mode,
+            leave=True,
+        )
         try:
             for epoch in range(self.state.epoch, epochs):
                 train_stats = self.train_epoch(epoch)
@@ -285,6 +340,7 @@ class Trainer:
 
                 self.log.log_metrics(row)
                 self.state.epoch = epoch + 1
+                sweep_bar.update(len(self.train_loader), loss=train_stats["loss"])
                 save_checkpoint(
                     ckpt_dir / "last.pt",
                     self.model,
@@ -297,6 +353,7 @@ class Trainer:
                 )
 
         except KeyboardInterrupt:
+            sweep_bar.close()
             self.log.warn("interrupted -- saving state so training can resume")
             save_checkpoint(
                 ckpt_dir / "last.pt",
@@ -310,8 +367,11 @@ class Trainer:
             )
             raise
 
+        finally:
+            sweep_bar.close()
+
         self.log.info(f"done. best {self.best_key}={self.state.best_metric:.4f} "
-                      f"at epoch {self.state.best_epoch}")
+                      f"at epoch {self.state.best_epoch + 1}")
         self.log.close()
         return self.state
 

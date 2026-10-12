@@ -1,9 +1,16 @@
 # The controlled baseline: plain concat + residual separable CNN.
+#
 # Identical to default.yaml in data, loss, schedule and seed. The only
 # difference is `model.name`, which is what makes the comparison controlled.
+#
+# Output head: sigmoid (see fusionedge/models/baseline.py for why). The first
+# attempt used clamp(0,1) and could not train -- 58% of output pixels sat on the
+# clamp boundary where the gradient is zero. Evidence preserved in
+# experiments/_failed/baseline_clamp_bug/. The correction makes THIS model
+# stronger; FusionEdge never had the problem.
 _base_: default.yaml
 
-run_name: baseline_simplecnn
+run_name: baseline_simplecnn_v2_sigmoid
 
 model:
   name: baseline

@@ -57,6 +57,58 @@ def test_deterministic_mode_is_reversible():
     assert torch.equal(x, torch.rand(4))
 
 
+def test_worker_init_fn_is_picklable():
+    """Regression: a closure here breaks every multi-worker DataLoader on Windows.
+
+    The spawn start method pickles worker_init_fn before sending it to the worker,
+    and a nested function has no importable identity -> PicklingError. Only Linux
+    with fork tolerates it, so this is a platform-dependent failure that CI on
+    Linux would not catch.
+    """
+    import pickle
+
+    from fusionedge.utils.seed import worker_init_fn
+
+    init = worker_init_fn(None)
+    restored = pickle.loads(pickle.dumps(init))
+    assert callable(restored)
+    restored(0)  # must actually run
+
+
+def test_worker_init_fn_runs_with_and_without_a_callback():
+    from fusionedge.utils.seed import worker_init_fn
+
+    seen: list[int] = []
+    worker_init_fn(lambda wid: seen.append(wid))(3)
+    assert seen == [3]
+
+    worker_init_fn(None)(0)  # no callback must still work
+
+
+def test_worker_init_fn_seeds_workers_differently():
+    """Distinct workers must get distinct numpy/python RNG streams.
+
+    torch's own generator is already per-worker (the DataLoader seeds it from
+    `initial_seed() + worker_id`), so the risk this guards is in numpy/random,
+    which our augmentation code draws from directly.
+    """
+    import pickle
+
+    from fusionedge.utils.seed import worker_init_fn
+
+    init = pickle.loads(pickle.dumps(worker_init_fn(None)))
+
+    np.random.seed(0)
+    init(0)
+    a = np.random.rand(4)
+
+    np.random.seed(0)
+    init(1)
+    b = np.random.rand(4)
+
+    assert not np.array_equal(a, b)
+
+
 def test_rng_state_roundtrip_restores_stream():
     seed_everything(99)
     state = rng_state()
