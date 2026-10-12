@@ -13,7 +13,10 @@ deterministic: true      # kernel determinism ON for training; benchmarks overri
 device: cuda
 
 dataset:
-  id: MFNet               # provenance registry id (see data/registry/*.json)
+  # Provenance registry id (see data/registry/*.json). MSRS uses its own
+  # published train/test partition, so eval_split 'val' below is the MSRS
+  # `test/` directory -- no method trains on it.
+  id: MSRS
   train_split: train
   eval_split: val
 

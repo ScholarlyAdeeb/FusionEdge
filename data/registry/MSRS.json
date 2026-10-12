@@ -1,28 +1,64 @@
 {
   "dataset_id": "MSRS",
-  "status": "unavailable",
-  "retrieved_at": "2026-10-12T16:19:20Z",
-  "licence": "MSRS: Multi-Spectral Road Scenarios for Practical Infrared and Visible Image Fusion (Tang et al.). Research use; cite the original paper. Redistribution of the images is not granted by this repository.",
+  "status": "ok",
+  "retrieved_at": "2026-10-12T18:12:54Z",
+  "licence": "MSRS: Multi-Spectral Road Scenarios for Practical Infrared and Visible Image Fusion (Tang et al.). Obtained from the authors' own repository github.com/Linfeng-Tang/MSRS, which commits the dataset as tracked files. Research use; cite the original paper. The images are NOT redistributed by this project -- only the download script and the provenance record are committed.",
   "attempts": [
     {
-      "kind": "github_dir",
-      "url": "https://github.com/Linfeng-Tang/SeAFusion/tree/main/datasets/MSRS",
-      "note": "Verified via GitHub trees API: contains only datasets/MSRS/Label/*.png (1445 segmentation masks). No train/test ir/vi pairs present, so it cannot serve as the image-pair source.",
-      "attempted_at": "2026-10-12T16:19:20Z",
-      "result": "inspected -- no IR/VI pairs at this path (labels only); skipped",
-      "downloaded": false
-    },
-    {
-      "kind": "url",
-      "url": "https://github.com/Linfeng-Tang/MSRS",
-      "note": "Official MSRS repository. README documents the dataset but publishes no archive URL (dataset distributed via Baidu Pan / author channels).",
-      "attempted_at": "2026-10-12T16:19:20Z",
-      "result": "no direct archive URL published at this location",
-      "downloaded": false
+      "kind": "git_sparse",
+      "url": "https://github.com/Linfeng-Tang/MSRS.git",
+      "ref": "main",
+      "sparse_paths": [
+        "train/ir",
+        "train/vi",
+        "test/ir",
+        "test/vi",
+        "detection/ir",
+        "detection/vi",
+        "detection/labels"
+      ],
+      "note": "Official MSRS repository, dataset committed as tracked files. Sparse checkout of the image directories plus the detection labels.",
+      "attempted_at": "2026-10-12T18:09:35Z",
+      "downloaded": true,
+      "commit": "5fa66e33c5ba875eec4de4f5a5bf609bdcc566c5",
+      "result": "sparse checkout ok at commit 5fa66e33c5ba"
     }
   ],
-  "root": null,
-  "splits": {},
-  "manifest_sha256": null,
-  "notes": "MSRS could not be obtained from any verifiable public mirror at the time of writing. Per docs/DATASET.md the approved fallback is MFNet; MSRS results are NOT reported anywhere in this repository."
+  "source_commit": "5fa66e33c5ba875eec4de4f5a5bf609bdcc566c5",
+  "source_url": "https://github.com/Linfeng-Tang/MSRS.git",
+  "root": "D:\\Projects\\Sam\\data\\MSRS\\canonical",
+  "split_definition": "The dataset's own published partition, reproduced verbatim: train/ is used for fitting and test/ is the held-out split (reported as 'val'). No re-splitting is performed, so these numbers are comparable to published MSRS results.",
+  "split_note": "MSRS ships train/ and test/; test/ is named 'val' throughout this codebase because no MSRS method trains on it.",
+  "split_val_frac": 0.25,
+  "splits": {
+    "train": 1083,
+    "val": 361,
+    "detection": 80
+  },
+  "expected_splits": {
+    "train": 1083,
+    "val": 361,
+    "detection": 80
+  },
+  "audit": {
+    "n_pairs": 1524,
+    "unique_dims": {
+      "640x480": 1524
+    },
+    "ir_channels": {
+      "1": 1524
+    },
+    "vi_channels": {
+      "3": 1524
+    },
+    "problems": [],
+    "n_problems": 0
+  },
+  "manifest_sha256": "e5f03de8da4a87cb94a56547aadb90e35eb12d808eddd1a77bd16706d7d28eb7",
+  "detection_labels": "D:\\Projects\\Sam\\data\\MSRS\\detection_labels",
+  "notes": "Primary benchmark dataset. 1444 pairs across the published train/test partition, plus 80 detection pairs for YOLOv5x6 mAP.",
+  "manifest_covers": [
+    "train",
+    "val"
+  ]
 }

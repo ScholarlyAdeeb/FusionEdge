@@ -52,30 +52,50 @@ REGISTRY_DIR = DATA_DIR / "registry"
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff")
 
-# --- MSRS attempt -----------------------------------------------------------
-# Recorded as data, not code: the MSRS paper/README describe the dataset but the
-# official repo hosts no downloadable archive. These entries exist so the failed
-# attempt is explicit and reproducible. `kind: github_dir` means "this GitHub path
-# was checked for IR/VI pairs"; `kind: url` means "an archive was attempted".
+# --- MSRS acquisition ------------------------------------------------------
+# CORRECTION (see docs/DATASET.md): an earlier revision of this script recorded
+# MSRS as unavailable after inspecting only the README. The dataset IS present in
+# the repository as tracked files:
+#
+#   train/ir, train/vi            1083 pairs   (plus train/Segmentation_labels)
+#   test/ir,  test/vi             361 pairs   (plus test/Segmentation_labels)
+#   detection/ir, detection/vi     80 pairs   (+ detection/labels, YOLO format)
+#                                                          -> 1083 + 361 = 1444
+#
+# which is exactly the 1,444 pairs the MSRS paper reports.
+#
+# We use a git sparse checkout rather than the repository tarball: the full repo
+# is ~656 MB (dominated by segmentation labels we do not need), while a sparse
+# checkout of only the image directories transfers far less and leaves a
+# verifiable commit SHA in the registry.
 MSRS_SOURCES: list[dict] = [
     {
-        "kind": "github_dir",
-        "url": "https://github.com/Linfeng-Tang/SeAFusion/tree/main/datasets/MSRS",
+        "kind": "git_sparse",
+        "url": "https://github.com/Linfeng-Tang/MSRS.git",
+        "ref": "main",
+        "sparse_paths": [
+            "train/ir",
+            "train/vi",
+            "test/ir",
+            "test/vi",
+            "detection/ir",
+            "detection/vi",
+            "detection/labels",
+        ],
         "note": (
-            "Verified via GitHub trees API: contains only datasets/MSRS/Label/*.png "
-            "(1445 segmentation masks). No train/test ir/vi pairs present, so it "
-            "cannot serve as the image-pair source."
-        ),
-    },
-    {
-        "kind": "url",
-        "url": "https://github.com/Linfeng-Tang/MSRS",
-        "note": (
-            "Official MSRS repository. README documents the dataset but publishes no "
-            "archive URL (dataset distributed via Baidu Pan / author channels)."
+            "Official MSRS repository, dataset committed as tracked files. "
+            "Sparse checkout of the image directories plus the detection labels."
         ),
     },
 ]
+
+#: The published MSRS split, as documented by the dataset authors. We reproduce
+#: it verbatim and never re-split: train/ for fitting, test/ for reporting.
+MSRS_SPLITS = {"train": ("train/ir", "train/vi"), "val": ("test/ir", "test/vi")}
+
+#: Expected counts from the MSRS paper (Tang et al.), used as a sanity gate.
+#: A mismatch is reported loudly rather than silently accepted.
+MSRS_EXPECTED = {"train": 1083, "val": 361, "detection": 80}
 
 # --- MFNet fallback --------------------------------------------------------
 # Two distinct Google Drive releases of MFNet exist; both are listed so the
@@ -110,8 +130,11 @@ MFNET_SOURCES: list[dict] = [
 LICENCE_NOTES = {
     "MSRS": (
         "MSRS: Multi-Spectral Road Scenarios for Practical Infrared and Visible "
-        "Image Fusion (Tang et al.). Research use; cite the original paper. "
-        "Redistribution of the images is not granted by this repository."
+        "Image Fusion (Tang et al.). Obtained from the authors' own repository "
+        "github.com/Linfeng-Tang/MSRS, which commits the dataset as tracked "
+        "files. Research use; cite the original paper. The images are NOT "
+        "redistributed by this project -- only the download script and the "
+        "provenance record are committed."
     ),
     "MFNet": (
         "MFNet: Multispectral image dataset for RGBT detection "
@@ -376,46 +399,240 @@ def audit_dataset(root: Path) -> dict:
 # --------------------------------------------------------------------------- #
 # MSRS attempt
 # --------------------------------------------------------------------------- #
-def attempt_msrs() -> dict:
-    """Record the MSRS acquisition attempt. Downloads MSRS only if a source
-    that actually contains IR/VI pairs is found; currently none is known."""
-    log("MSRS: attempting acquisition from known sources")
-    attempts = []
-    for src in MSRS_SOURCES:
-        entry = dict(src)
-        entry["attempted_at"] = utc_now()
-        if src["kind"] == "github_dir":
-            entry["result"] = (
-                "inspected -- no IR/VI pairs at this path (labels only); skipped"
-            )
-            entry["downloaded"] = False
-        else:
-            entry["result"] = "no direct archive URL published at this location"
-            entry["downloaded"] = False
-        attempts.append(entry)
-        log(f"  - {src['url']}: {entry['result']}")
+def git_sparse_checkout(
+    url: str,
+    ref: str,
+    sparse_paths: list[str],
+    dest: Path,
+    timeout_min: float = 25.0,
+) -> str:
+    """Sparse-checkout `sparse_paths` from `url` into `dest`. Returns the commit SHA.
 
-    ok = any(a.get("downloaded") for a in attempts)
+    Uses `git clone --filter=blob:none --sparse`, which avoids downloading the
+    repository's full history and its unrequested blobs. The commit SHA is
+    returned and stored in the registry so a result can be tied to an exact
+    upstream state.
+    """
+    import subprocess
+
+    dest.mkdir(parents=True, exist_ok=True)
+    work = dest / "_repo"
+    _force_rmtree(work)
+    # `git init` requires the directory to exist; creating it first avoids the
+    # cwd-based NotADirectoryError on Windows.
+    work.mkdir(parents=True, exist_ok=True)
+
+    def run(args: list[str], cwd: Path | None = None, timeout: float | None = None) -> None:
+        log("  $ git " + " ".join(args))
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd) if cwd else None,
+            capture_output=True,
+            text=True,
+            timeout=timeout if timeout else timeout_min * 60,
+            check=False,
+        )
+        if proc.returncode != 0:
+            tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-4:]
+            raise RuntimeError(f"git {' '.join(args[:2])} failed: {' | '.join(tail)}")
+
+    run(["init", "--quiet"], cwd=work)
+    run(["remote", "add", "origin", url], cwd=work)
+    run(["config", "core.sparseCheckout", "true"], cwd=work)
+    run(["config", "extensions.partialClone", "origin"], cwd=work)
+    (work / ".git" / "info").mkdir(parents=True, exist_ok=True)
+    (work / ".git" / "info" / "sparse-checkout").write_text(
+        "\n".join(sparse_paths) + "\n", encoding="utf-8"
+    )
+    run(
+        ["fetch", "--depth", "1", "--filter=blob:none", "origin", ref],
+        cwd=work,
+    )
+    run(["checkout", "--quiet", "FETCH_HEAD"], cwd=work)
+
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(work),
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    return sha
+
+
+def _force_rmtree(path: Path) -> None:
+    """Remove a tree, clearing read-only bits first.
+
+    Git writes pack files read-only on Windows, so a plain shutil.rmtree raises
+    PermissionError on the second run. Handled here rather than at each call
+    site, since re-running the script after a partial download is the normal
+    case, not an edge case.
+    """
+    if not path.exists():
+        return
+
+    def onerror(func, p, _exc):
+        try:
+            os.chmod(p, 0o700)
+            func(p)
+        except Exception:  # noqa: BLE001 -- best effort; rmtree will report if it fails
+            pass
+
+    shutil.rmtree(path, onerror=onerror)
+
+
+def attempt_msrs(timeout_min: float = 25.0, force: bool = False) -> dict:
+    """Acquire MSRS from the official repository and reproduce its published split.
+
+    Unlike MFNet, MSRS ships an explicit train/ and test/ partition, so we use it
+    as-is: `train/` for fitting, `test/` as the held-out split reported as `val`
+    (no MSRS method trains on test/). The `detection/` subset is registered
+    separately for the YOLOv5x6 mAP metric.
+    """
+    log("MSRS: acquiring from the official repository (sparse checkout)")
+    REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
+    registry_file = REGISTRY_DIR / "MSRS.json"
+    root = DATA_DIR / "MSRS"
+
+    if registry_file.exists() and not force:
+        rec = json.loads(registry_file.read_text())
+        if rec.get("status") == "ok" and Path(rec.get("root", "")).exists():
+            log("MSRS: already present and registered; skipping download")
+            return rec
+
+    attempts: list[dict] = []
+    entry = dict(MSRS_SOURCES[0])
+    entry["attempted_at"] = utc_now()
+    commit = None
+    try:
+        _force_rmtree(root)
+        commit = git_sparse_checkout(
+            entry["url"], entry["ref"], entry["sparse_paths"], root, timeout_min
+        )
+        entry["downloaded"] = True
+        entry["commit"] = commit
+        entry["result"] = f"sparse checkout ok at commit {commit[:12]}"
+    except Exception as exc:  # noqa: BLE001
+        entry["downloaded"] = False
+        entry["result"] = f"{type(exc).__name__}: {exc}"
+        log(f"  - MSRS: {entry['result']}")
+
+    attempts.append(entry)
+
+    def unavailable_record(note: str) -> dict:
+        rec = {
+            "dataset_id": "MSRS",
+            "status": "unavailable",
+            "retrieved_at": utc_now(),
+            "licence": LICENCE_NOTES["MSRS"],
+            "attempts": attempts,
+            "root": None,
+            "splits": {},
+            "manifest_sha256": None,
+            "notes": note,
+        }
+        registry_file.write_text(json.dumps(rec, indent=2))
+        return rec
+
+    if not entry.get("downloaded"):
+        return unavailable_record("MSRS checkout failed; see attempts.")
+
+    repo = root / "_repo"
+    canonical = root / "canonical"
+    splits: dict[str, list[str]] = {}
+
+    for split, (ir_rel, vi_rel) in MSRS_SPLITS.items():
+        ir_src, vi_src = repo / ir_rel, repo / vi_rel
+        if not (ir_src.is_dir() and vi_src.is_dir()):
+            return unavailable_record(f"missing {ir_rel}/{vi_rel} in the checkout")
+        pairs, leftover = pair_up(ir_src, vi_src)
+        if leftover:
+            log(f"  warning: {split}: {len(leftover)} unpaired files skipped")
+        if not pairs:
+            return unavailable_record(f"no validated pairs in {split}")
+        for mod in ("ir", "vi"):
+            (canonical / split / mod).mkdir(parents=True, exist_ok=True)
+        for stem, ir_name, vi_name in pairs:
+            shutil.copy2(ir_src / ir_name, canonical / split / "ir" / f"{stem}.png")
+            shutil.copy2(vi_src / vi_name, canonical / split / "vi" / f"{stem}.png")
+        splits[split] = sorted(stem for stem, _, _ in pairs)
+        expected = MSRS_EXPECTED[split]
+        got = len(splits[split])
+        flag = "ok" if got == expected else f"MISMATCH (paper reports {expected})"
+        log(f"  {split}: {got} pairs [{flag}]")
+
+    # detection subset, used for the YOLOv5x6 mAP metric
+    det_ir, det_vi = repo / "detection" / "ir", repo / "detection" / "vi"
+    det_pairs: list[str] = []
+    if det_ir.is_dir() and det_vi.is_dir():
+        det_pairs_list, _ = pair_up(det_ir, det_vi)
+        for mod in ("ir", "vi"):
+            (canonical / "detection" / mod).mkdir(parents=True, exist_ok=True)
+        for stem, ir_name, vi_name in det_pairs_list:
+            shutil.copy2(det_ir / ir_name, canonical / "detection" / "ir" / f"{stem}.png")
+            shutil.copy2(det_vi / vi_name, canonical / "detection" / "vi" / f"{stem}.png")
+            det_pairs.append(stem)
+        det_pairs.sort()
+        log(f"  detection: {len(det_pairs)} pairs "
+            f"[{'ok' if len(det_pairs) == MSRS_EXPECTED['detection'] else 'MISMATCH'}]")
+
+    det_labels_src = repo / "detection" / "labels"
+    det_labels_dst = DATA_DIR / "MSRS" / "detection_labels"
+    if det_labels_src.is_dir():
+        _force_rmtree(det_labels_dst)
+        shutil.copytree(det_labels_src, det_labels_dst)
+        n_lab = len([p for p in det_labels_dst.iterdir() if p.is_file()])
+        log(f"  detection labels: {n_lab} files -> {det_labels_dst}")
+
+    audit = audit_dataset(canonical)
+    if audit["n_pairs"] == 0:
+        return unavailable_record(f"content audit found no loadable pairs: {audit}")
+    log(f"  audit: {audit['n_pairs']} pairs, dims={audit['unique_dims']}, "
+        f"ir_ch={audit['ir_channels']}, vi_ch={audit['vi_channels']}, "
+        f"problems={audit['n_problems']}")
+
+    # The manifest covers the train/val partition only. `detection/` is an
+    # auxiliary subset for the mAP metric; its count is recorded separately in
+    # `splits` so a change in either is still visible, but it is deliberately
+    # excluded so that this manifest means "the benchmark split", which is what
+    # a results row is attributable to.
+    entries = [f"{s}/{pid}" for s, ids in splits.items() for pid in ids]
+
+    total = sum(len(v) for v in splits.values())
     record = {
         "dataset_id": "MSRS",
-        "status": "ok" if ok else "unavailable",
+        "status": "ok",
         "retrieved_at": utc_now(),
         "licence": LICENCE_NOTES["MSRS"],
         "attempts": attempts,
-        "root": None,
-        "splits": {},
-        "manifest_sha256": None,
+        "source_commit": commit,
+        "source_url": MSRS_SOURCES[0]["url"],
+        "root": str(canonical),
+        "split_definition": (
+            "The dataset's own published partition, reproduced verbatim: "
+            "train/ is used for fitting and test/ is the held-out split (reported "
+            "as 'val'). No re-splitting is performed, so these numbers are "
+            "comparable to published MSRS results."
+        ),
+        "split_note": (
+            "MSRS ships train/ and test/; test/ is named 'val' throughout this "
+            "codebase because no MSRS method trains on it."
+        ),
+        "split_val_frac": round(len(splits["val"]) / max(total, 1), 4),
+        "splits": {k: len(v) for k, v in splits.items()} | {"detection": len(det_pairs)},
+        "expected_splits": MSRS_EXPECTED,
+        "audit": audit,
+        "manifest_covers": sorted(splits.keys()),
+        "manifest_sha256": manifest_hash(entries),
+        "detection_labels": str(det_labels_dst) if det_labels_dst.exists() else None,
         "notes": (
-            "MSRS could not be obtained from any verifiable public mirror at the "
-            "time of writing. Per docs/DATASET.md the approved fallback is MFNet; "
-            "MSRS results are NOT reported anywhere in this repository."
-            if not ok
-            else ""
+            f"Primary benchmark dataset. {total} pairs across the published "
+            f"train/test partition, plus {len(det_pairs)} detection pairs for "
+            f"YOLOv5x6 mAP."
         ),
     }
-    REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
-    (REGISTRY_DIR / "MSRS.json").write_text(json.dumps(record, indent=2))
-    log(f"MSRS: status={record['status']} -> registry written")
+    registry_file.write_text(json.dumps(record, indent=2))
+    log(f"MSRS: status=ok, splits={record['splits']} -> registry written")
     return record
 
 
@@ -725,7 +942,15 @@ def verify(record_path: Path) -> int:
         log(f"  ok {split}: {n_ir} pairs")
 
     # Split-partition leakage: no pair id may appear in two splits.
-    all_ids = {split: set(list_images(root / split / "ir")) for split in splits}
+    # Only the train/val splits take part in the manifest. Auxiliary subsets
+    # (e.g. MSRS's `detection/`, used only for the mAP metric) are covered by
+    # their own counts above; including them would make the manifest depend on
+    # which auxiliary subsets happen to be present, and the write-side and
+    # verify-side would disagree about whether they belong.
+    manifest_splits = {
+        k: v for k, v in splits.items() if k in ("train", "val", "test", "valid")
+    }
+    all_ids = {split: set(list_images(root / split / "ir")) for split in manifest_splits}
     names = sorted(all_ids)
     for i in range(len(names)):
         for j in range(i + 1, len(names)):
@@ -825,8 +1050,15 @@ def main() -> int:
         return 1 if rc else 0
 
     if args.dataset in ("auto", "msrs"):
-        attempt_msrs()
-    if args.dataset in ("auto", "mfnet"):
+        msrs = attempt_msrs(timeout_min=args.timeout_min, force=args.force)
+        if msrs.get("status") == "ok":
+            log("")
+            log("MSRS acquired -- no fallback needed.")
+            return 0 if not args.verify_only else 0
+        log("MSRS unavailable; falling back to MFNet")
+        log("")
+
+    if args.dataset == "mfnet":
         mf = attempt_mfnet(timeout_min=args.timeout_min, force=args.force)
         if mf.get("status") != "ok":
             log("")

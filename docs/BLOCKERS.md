@@ -1,66 +1,75 @@
-# Blocked: what is waiting on what, and exactly what is needed to unblock
+# Status: dataset acquired; remaining gates before any reported number
 
-**Status: no real-data training, no benchmark table, no quality claim is possible yet.**
-
-This file exists so the blockage is precise rather than vague. It states what is
-done, what is blocked, and the exact checklist required to release the block.
+**MSRS is acquired and validated. Real-data training is no longer blocked on
+acquisition.** The gates below now concern *results*, not *data*.
 
 ---
 
-## 1. What is complete and verified
+## 0. Correction
 
-| Component | State | Evidence |
-|---|---|---|
-| Repository, pinned deps, `.gitignore` | done | commit `ff58bfa` |
-| Data layer, losses, metrics, classical baselines | done | unit tests, cross-validated against scikit-image |
-| Training / evaluation / benchmark engine | done | integration tests on a generated 8-pair fixture |
-| FusionEdge architecture + 6 ablation switches | done | 33 architecture tests incl. learnability check |
-| Real-image inference path | done | `scripts/infer_pairs.py`, tested on real image files |
-| Acquisition pipeline (extract, pair, split, audit, verify) | done | 27 tests in `tests/test_acquisition.py` |
-| GPU capability and latency profile | done | `scripts/gpu_check.py`, `scripts/profile_latency.py` |
-| **Test suite** | **244 passing** | `python -m pytest tests -q` |
+An earlier revision of this document reported MSRS as unavailable. That was wrong:
+the check had inspected only the repository README. The dataset is committed as
+tracked files in `github.com/Linfeng-Tang/MSRS` (1444 pairs + a detection subset
+with YOLO labels). The mistake and its cause are recorded in `docs/DATASET.md` §0
+rather than quietly overwritten.
 
-## 2. What is blocked
+---
 
-| Blocked item | Blocked by |
+## 1. Dataset status
+
+| | |
 |---|---|
-| Baseline training run | dataset acquisition |
-| FusionEdge training run | dataset acquisition |
-| Ablation sweep (6 configs) | dataset acquisition |
-| EN / AG / SF / MS-SSIM tables | dataset acquisition |
-| YOLOv5x6 mAP | dataset acquisition + detection annotations |
-| Any claim that FusionEdge > baseline | dataset acquisition + completed ablation |
-| README results tables | the above |
+| Dataset | **MSRS** (acquired) |
+| Method | git sparse checkout, commit `5fa66e33c5ba` |
+| Pairs | train 1083, val(=test) 361, detection 80 |
+| Split | the **published** partition, unmodified |
+| Audit | 1524 pairs, all 640×480, IR 1-channel, VI 3-channel, **0 problems** |
+| Leakage | 0 shared ids, 0 byte-identical IR images across splits |
+| Registry | `data/registry/MSRS.json`, `status: "ok"` |
+| Verify | `python scripts/download_data.py --verify-only` → all checks pass |
 
-**Both approved datasets are unavailable:**
+Because the published split is used unaltered, results here **are** comparable to
+published MSRS numbers. This applies to MSRS only.
 
-* **MSRS** — the official repository publishes no archive URL. The only GitHub
-  copy that could be verified (`Linfeng-Tang/SeAFusion`) contains 1,445
-  segmentation *labels* and no IR/VI pairs. No HuggingFace mirror exists.
-* **MFNet** — both Google Drive transports are quota-blocked. The detection
-  release's folder listing succeeds but the file returns *"have had many
-  accesses"* and direct requests redirect to a Google account sign-in page; the
-  segmentation release returns HTTP 500.
+## 2. What is complete
 
-Recorded in `data/registry/MSRS.json` and `data/registry/MFNet.json`, both with
-`status: "unavailable"` and a verbatim reason per attempt.
+| Component | State |
+|---|---|
+| Repository, pinned deps, `.gitignore` | done |
+| Data layer, losses, metrics, classical baselines | done, cross-validated against scikit-image |
+| Training / evaluation / benchmark engine | done |
+| FusionEdge + 6 ablation switches | done |
+| Real-image inference path | done |
+| Acquisition + audit + split + leakage verification | done |
+| GPU capability and latency profile | done |
+| YOLOv5x6 mAP evaluator (ultralytics + ONNX fallback) | done |
 
-## 3. Why nothing was substituted
+## 3. Remaining gates, in order
 
-Per the project specification and the approved plan:
+| Gate | What must happen | Blocks |
+|---|---|---|
+| **G1 smoke run** | `run_experiment.py --config configs/baseline.yaml --smoke` exits 0 with finite metrics and `"smoke": true` | everything downstream |
+| **G2 baseline run** | `baseline.yaml` completes; `metrics.json` written | any comparison |
+| **G3 FusionEdge run** | `fusionedge.yaml` completes | the comparison itself |
+| **G4 ablations** | 6 ablation configs complete | the ablation table |
+| **G5 figures** | `scripts/make_figures.py` generates tables **from** `metrics.json` | README results |
+| **G6 mAP** | YOLOv5x6 evaluation on `detection/` with its YOLO labels | the downstream-task claim |
 
-* **No synthetic training.** `SyntheticPairDataset` requires an explicit
-  `allow_synthetic=True` flag, marks every sample `"synthetic": true`, and is
-  unreachable from `build_dataloaders`. Training entry points never see it.
-* **No unlabelled substitute.** An arbitrary IR/VI folder would produce numbers
-  that cannot be attributed to any dataset.
-* **No blocked-but-noted numbers.** `run_experiment.py` exits with code 2 and an
-  explicit message when the dataset registry is unusable, rather than training on
-  something else.
-* **No quality claims.** `infer.py` and `infer_pairs.py` *refuse* to run on
-  untrained weights, because an untrained FusionEdge returns the visible image
-  unchanged — a plausible-looking picture with zero infrared content. Outputs are
-  labelled `"dataset_id": "UNREGISTERED"` and `"NOT a benchmark result"`.
+## 4. Rules that remain in force
+
+* **No quality claim before G2–G5.** Nothing in README or docs may state that
+  FusionEdge outperforms the baseline until the held-out numbers say so on the
+  MSRS test split. If the ablations do not support a component, the component is
+  removed rather than defended.
+* **No hand-typed numbers.** Every table is generated from `experiments/*/metrics.json`
+  by `scripts/make_figures.py`, which refuses to mix datasets or inference
+  backends in one table.
+* **No synthetic training.** `SyntheticPairDataset` is fenced behind
+  `allow_synthetic=True`, marks every sample, and is unreachable from
+  `build_dataloaders`.
+* **Untrained weights are refused** by `infer.py` / `infer_pairs.py`, because an
+  untrained FusionEdge returns the visible image unchanged — a plausible-looking
+  picture carrying zero infrared information.
 
 ---
 

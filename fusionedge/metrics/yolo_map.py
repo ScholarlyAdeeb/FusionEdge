@@ -316,18 +316,62 @@ def resolve_backend(cfg: YoloConfig, prefer: str | None = None) -> Any:
 # --------------------------------------------------------------------------- #
 # orchestration
 # --------------------------------------------------------------------------- #
+def load_yolo_txt_labels(
+    path: str | Path, image_size: tuple[int, int] | None = None
+) -> dict[str, dict[str, np.ndarray]]:
+    """Load YOLO-format labels: one .txt per image, `class cx cy w h` normalised.
+
+    This is the format MSRS ships in `detection/labels/*.txt` (verified against
+    the repository: 81 files, e.g. `2 0.221094 0.493750 0.117188 0.170833`).
+
+    The coordinates are normalised to [0,1], so converting them to absolute
+    pixels requires the image size. When `image_size` is omitted the boxes are
+    returned in normalised units and the caller must supply a size -- mixing
+    normalised ground truth with pixel-space detections would silently produce a
+    meaningless mAP, so this is why the parameter is explicit rather than
+    guessed.
+
+    Returns class -> image_key -> (M,4) boxes as [x1, y1, x2, y2].
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"No YOLO labels at {path}")
+
+    out: dict[str, dict[str, list]] = {}
+    for txt in sorted(path.glob("*.txt")):
+        key = txt.stem
+        for line in txt.read_text(encoding="utf-8").splitlines():
+            parts = line.split()
+            if len(parts) < 5:
+                continue  # blank or malformed line
+            cls = parts[0]
+            cx, cy, bw, bh = (float(v) for v in parts[1:5])
+            if image_size is not None:
+                W, H = image_size
+                cx, cy, bw, bh = cx * W, cy * H, bw * W, bh * H
+            x1, y1 = cx - bw / 2, cy - bh / 2
+            out.setdefault(cls, {}).setdefault(key, []).append(
+                [x1, y1, x1 + bw, y1 + bh]
+            )
+    return {c: {k: np.array(v, dtype=float) for k, v in ims.items()} for c, ims in out.items()}
+
+
 def load_annotations(path: str | Path) -> dict[str, dict[str, np.ndarray]]:
     """Load detection annotations as class -> image_key -> (M,4) boxes.
 
-    Supports the two formats this project may encounter:
-      * COCO: a single JSON with `images` and `annotations`.
-      * a per-image directory of JSONs (MFNet's `anno_json` layout).
+    Supports the three formats this project may encounter:
+      * COCO: a single JSON with `images` and `annotations`,
+      * a per-image directory of JSONs (MFNet's `anno_json` layout),
+      * a directory of YOLO-format .txt files (MSRS `detection/labels`).
 
     Raises FileNotFoundError with a clear message if annotations are absent --
     the caller must then report the metric as unavailable, not as zero.
     """
     path = Path(path)
     out: dict[str, dict[str, np.ndarray]] = {}
+
+    if path.is_dir() and any(path.glob("*.txt")):
+        return load_yolo_txt_labels(path, image_size=None)
 
     if path.is_dir():
         for jf in sorted(path.glob("*.json")):
@@ -368,9 +412,31 @@ def evaluate_yolo_map(
     cfg: YoloConfig | None = None,
     prefer_backend: str | None = None,
 ) -> dict[str, Any]:
-    """Run detection over `images` and score against `annotations`."""
+    """Run detection over `images` and score against `annotations`.
+
+    `annotations` must already be in absolute pixels. If it was loaded from
+    YOLO .txt (normalised) you must have passed an `image_size`; mixing
+    normalised ground truth with pixel detections would yield a meaningless
+    mAP, so this function checks that the two spaces are consistent.
+    """
     cfg = cfg or YoloConfig()
     backend = resolve_backend(cfg, prefer_backend)
+
+    # Guard: detections are in pixels, so ground truth must be too.
+    max_gt = max(
+        (float(np.max(v)) for ims in annotations.values() for v in ims.values() if len(v)),
+        default=0.0,
+    )
+    max_img = max(
+        (float(np.asarray(im).shape[1]) for im in images if np.asarray(im).ndim >= 2),
+        default=0.0,
+    )
+    if annotations and max_gt > 0 and max_img > 0 and max_gt <= 1.5 and max_img > 10:
+        raise ValueError(
+            f"ground-truth boxes look normalised (max coordinate {max_gt:.2f}) "
+            f"but detections are in pixels (image width {max_img:.0f}). "
+            f"Re-load the labels with an explicit image_size."
+        )
 
     dets_all = backend.detect(list(images))
     detections: dict[str, dict[str, np.ndarray]] = {}

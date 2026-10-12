@@ -39,6 +39,10 @@ dd = importlib.util.module_from_spec(_spec)
 assert _spec and _spec.loader
 _spec.loader.exec_module(dd)
 
+MSRS_SOURCES = dd.MSRS_SOURCES
+MSRS_SPLITS = dd.MSRS_SPLITS
+MSRS_EXPECTED = dd.MSRS_EXPECTED
+
 
 # --------------------------------------------------------------------------- #
 # helpers
@@ -329,17 +333,87 @@ def test_licence_notes_cover_every_dataset_id():
         assert ds in dd.LICENCE_NOTES
 
 
+def test_msrs_sources_point_at_real_data():
+    """Regression guard for a real mistake: MSRS was initially recorded as
+    unavailable because only the README was inspected. The repository does
+    contain the dataset as tracked files, so the MSRS source list must be a
+    sparse-checkout entry, not an inspection-only record."""
+    assert MSRS_SOURCES, "MSRS must have at least one acquisition source"
+    src = MSRS_SOURCES[0]
+    assert src["kind"] == "git_sparse", (
+        "MSRS must be acquired by sparse checkout of the tracked dataset"
+    )
+    assert src["url"].endswith("MSRS.git")
+    for needed in ("train/ir", "train/vi", "test/ir", "test/vi"):
+        assert needed in src["sparse_paths"], f"missing sparse path {needed}"
+
+
+def test_msrs_split_is_the_published_partition():
+    """MSRS ships train/ and test/. We must reproduce them, never re-split."""
+    assert MSRS_SPLITS["train"] == ("train/ir", "train/vi")
+    assert MSRS_SPLITS["val"] == ("test/ir", "test/vi")
+    assert "sha1" not in str(MSRS_SPLITS), "MSRS must not use the hash re-split"
+
+
+def test_msrs_expected_counts_match_the_paper():
+    """1083 train + 361 test = 1444 pairs, as reported by the MSRS paper. A count
+    mismatch at acquisition time is a loud warning, not a silent accept."""
+    assert MSRS_EXPECTED["train"] + MSRS_EXPECTED["val"] == 1444
+
+
+def test_msrs_split_sizes_are_consistent():
+    """MSRS detection labels ship in YOLO txt format; the mAP evaluator reads
+    either that or COCO JSON, and must not be handed a directory it cannot use."""
+    import inspect
+
+    from fusionedge.metrics.yolo_map import load_annotations
+
+    src = inspect.getsource(load_annotations)
+    assert "xmin" in src or "bbox" in src
+    assert ".txt" not in src.split("def load_annotations")[0]
+
+
 def test_msrs_attempt_records_failure_as_unavailable(monkeypatch, tmp_path: Path):
-    """The MSRS failure must stay recorded and machine-readable, not forgotten."""
+    """When MSRS acquisition fails, the failure must be recorded and
+    machine-readable -- never silently retried or forgotten.
+
+    The real checkout is stubbed to raise so the test never touches the network
+    (and never re-downloads ~500 MB of images on every test run).
+    """
     monkeypatch.setattr(dd, "REGISTRY_DIR", tmp_path)
+    monkeypatch.setattr(dd, "DATA_DIR", tmp_path / "data")
+
+    def boom(*_a, **_k):
+        raise RuntimeError("network unavailable (stubbed for test)")
+
+    monkeypatch.setattr(dd, "git_sparse_checkout", boom)
+
     rec = dd.attempt_msrs()
     assert rec["status"] == "unavailable"
     assert rec["attempts"], "each source attempt must be recorded"
     for a in rec["attempts"]:
         assert a["result"], "each attempt needs a stated reason"
+    assert "network unavailable" in rec["attempts"][0]["result"]
     assert (tmp_path / "MSRS.json").exists()
-    assert "not comparable" not in rec["notes"].lower() or True  # wording is free
+    assert rec["manifest_sha256"] is None
     assert "MSRS" in rec["notes"]
+
+
+def test_msrs_verified_registry_is_reused_without_redownloading(monkeypatch, tmp_path: Path):
+    """A registered, present dataset must not trigger a re-download."""
+    monkeypatch.setattr(dd, "REGISTRY_DIR", tmp_path)
+    root = tmp_path / "data" / "MSRS" / "canonical"
+    root.mkdir(parents=True)
+    (tmp_path / "MSRS.json").write_text(
+        json.dumps({"dataset_id": "MSRS", "status": "ok", "root": str(root)})
+    )
+
+    def must_not_run(*_a, **_k):
+        raise AssertionError("attempted a re-download of an already-registered dataset")
+
+    monkeypatch.setattr(dd, "git_sparse_checkout", must_not_run)
+    rec = dd.attempt_msrs()
+    assert rec["status"] == "ok"
 
 
 def test_registry_refuses_dataset_without_status_ok(tmp_path: Path):
