@@ -320,6 +320,24 @@ def test_benchmark_reports_latency_and_params(tmp_path):
     assert lat["warmup_iters"] == 2 and lat["iters"] == 5
 
 
+def test_benchmark_leaves_the_model_trainable(tmp_path):
+    """Regression: moving the model to the device inside `inference_mode` turns
+    its parameters into inference tensors, and any later backward pass then
+    fails with 'Inference tensors cannot be saved for backward'. The benchmark
+    runs after training in the real pipeline, so this ordering is real."""
+    from fusionedge.engine.benchmark import benchmark_latency
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    m = build_model("fusionedge", {"width": 8, "depth": 1})
+    benchmark_latency(m, (32, 32), device=device, warmup=1, iters=2)
+
+    out = m(torch.rand(1, 1, 32, 32, device=device), torch.rand(1, 3, 32, 32, device=device))
+    out.mean().backward()
+    grads = [p.grad for p in m.parameters() if p.grad is not None]
+    assert grads, "no parameter received a gradient after benchmarking"
+    assert any(g.abs().sum() > 0 for g in grads)
+
+
 def test_benchmark_uses_cuda_when_available(tmp_path):
     from fusionedge.engine.benchmark import benchmark_latency
 

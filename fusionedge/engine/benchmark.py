@@ -36,7 +36,6 @@ def checkpoint_size_mb(model: nn.Module, path: str | Path | None = None) -> floa
     return n * 4 / 2**20  # fp32
 
 
-@torch.inference_mode()
 def benchmark_latency(
     model: nn.Module,
     size: tuple[int, int] = (480, 640),
@@ -49,6 +48,11 @@ def benchmark_latency(
 ) -> dict[str, Any]:
     """Time full forward passes. Returns latency in milliseconds."""
     dev = torch.device(device)
+    # NOTE: the device move happens OUTSIDE inference_mode on purpose. Tensors
+    # converted inside inference_mode become "inference tensors", and an
+    # inference-tensor parameter cannot be used in an autograd-tracked op --
+    # which would silently break any training performed on the same model object
+    # afterwards ("Inference tensors cannot be saved for backward").
     model = model.to(dev).eval()
     h, w = size
     ir = torch.rand(batch_size, 1, h, w, device=dev)
@@ -58,40 +62,41 @@ def benchmark_latency(
     if use_cuda:
         torch.backends.cudnn.benchmark = True
 
-    # --- warmup (also reported: a long warmup is itself a finding) --- #
-    if use_cuda:
-        torch.cuda.synchronize()
-    t0 = time.perf_counter()
-    for _ in range(max(0, warmup)):
+    def run() -> None:
         if amp and use_cuda:
             with torch.autocast("cuda", dtype=torch.float16):
                 model(ir, vi)
         else:
             model(ir, vi)
+
+    # --- warmup (also reported: a long warmup is itself a finding) --- #
+    if use_cuda:
+        torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    with torch.inference_mode():
+        for _ in range(max(0, warmup)):
+            run()
     if use_cuda:
         torch.cuda.synchronize()
     warmup_s = time.perf_counter() - t0
 
     # --- timed --- #
     times: list[float] = []
-    if use_cuda:
-        starts = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
-        ends = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
-        for i in range(iters):
-            starts[i].record()
-            if amp:
-                with torch.autocast("cuda", dtype=torch.float16):
-                    model(ir, vi)
-            else:
-                model(ir, vi)
-            ends[i].record()
-        torch.cuda.synchronize()
-        times = [s.elapsed_time(e) for s, e in zip(starts, ends)]
-    else:
-        for _ in range(iters):
-            t = time.perf_counter()
-            model(ir, vi)
-            times.append((time.perf_counter() - t) * 1000.0)
+    with torch.inference_mode():
+        if use_cuda:
+            starts = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
+            ends = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
+            for i in range(iters):
+                starts[i].record()
+                run()
+                ends[i].record()
+            torch.cuda.synchronize()
+            times = [s.elapsed_time(e) for s, e in zip(starts, ends)]
+        else:
+            for _ in range(iters):
+                t = time.perf_counter()
+                run()
+                times.append((time.perf_counter() - t) * 1000.0)
 
     times.sort()
     out = {
@@ -111,12 +116,12 @@ def benchmark_latency(
 
     if use_cuda:
         torch.cuda.reset_peak_memory_stats()
-        model(ir, vi)
+        with torch.inference_mode():
+            run()
         torch.cuda.synchronize()
         out["peak_vram_mb"] = round(torch.cuda.max_memory_allocated() / 2**20, 2)
         out["gpu"] = torch.cuda.get_device_name(0)
 
-    model.to("cpu")
     return out
 
 
