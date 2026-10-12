@@ -1,0 +1,15 @@
+# Ablation: separate (unshared) stem weights per modality.
+#
+# Tests the assumption behind the shared stem -- that one set of early filters is
+# valid for both infrared and visible. If unsharing wins clearly, the sharing was
+# a false economy and the parameter saving it bought was not free.
+_base_: default.yaml
+
+run_name: ablation_unshared_stem
+
+model:
+  name: fusionedge
+  cfg:
+    width: 32
+    depth: 2
+    shared_stem: false

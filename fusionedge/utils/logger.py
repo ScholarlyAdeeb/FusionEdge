@@ -91,6 +91,11 @@ class RunLogger:
                 csv.DictWriter(f, fieldnames=self._csv_fields).writeheader()
             existing = self._csv_fields
 
+        # A logger re-attached to an existing run (e.g. after a resume) reads the
+        # header from disk; it must adopt it as its own schema, otherwise the
+        # append below would have no fieldnames.
+        self._csv_fields = existing
+
         new_keys = [k for k in row if k not in existing]
         if new_keys:
             old_fields = list(existing)

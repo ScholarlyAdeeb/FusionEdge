@@ -1,0 +1,12 @@
+# The controlled baseline: plain concat + residual separable CNN.
+# Identical to default.yaml in data, loss, schedule and seed. The only
+# difference is `model.name`, which is what makes the comparison controlled.
+_base_: default.yaml
+
+run_name: baseline_simplecnn
+
+model:
+  name: baseline
+  cfg:
+    width: 32
+    depth: 4

@@ -1,0 +1,11 @@
+# Ablation: remove per-branch channel attention (SE-lite).
+_base_: default.yaml
+
+run_name: ablation_no_se
+
+model:
+  name: fusionedge
+  cfg:
+    width: 32
+    depth: 2
+    use_se: false

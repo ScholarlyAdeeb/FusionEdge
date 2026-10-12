@@ -1,0 +1,15 @@
+# Ablation: remove cross-modal interaction.
+#
+# Each branch is processed independently; the only cross-modal path left is the
+# fusion gate itself. Tests whether the coarse attention exchange earns its
+# parameters.
+_base_: default.yaml
+
+run_name: ablation_no_cross
+
+model:
+  name: fusionedge
+  cfg:
+    width: 32
+    depth: 2
+    use_cross_modal: false

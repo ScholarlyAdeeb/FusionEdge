@@ -1,0 +1,16 @@
+# Ablation: dense 3x3 convolutions instead of depthwise-separable ones.
+#
+# Width, depth and loss are held fixed, so this row isolates *separability*:
+# fewer parameters and FLOPs for the same nominal shape. It is the row that
+# justifies the "lightweight" part of the claim, and it is also the row most
+# likely to cost quality -- which is the interesting part.
+_base_: default.yaml
+
+run_name: ablation_dense_conv
+
+model:
+  name: fusionedge
+  cfg:
+    width: 32
+    depth: 2
+    separable: false

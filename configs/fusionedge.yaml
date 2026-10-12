@@ -1,0 +1,20 @@
+# The full FusionEdge model. Identical to default.yaml's data pipeline, loss,
+# schedule and seed; only the architecture differs from baseline.yaml.
+_base_: default.yaml
+
+run_name: fusionedge_main
+
+model:
+  name: fusionedge
+  cfg:
+    width: 32
+    depth: 2
+    dilations: [1, 2]
+    use_cross_modal: true
+    adaptive_fusion: true
+    use_edge_guidance: true
+    use_se: true
+    separable: true
+    residual_output: true
+    shared_stem: true
+    token_grid: 8

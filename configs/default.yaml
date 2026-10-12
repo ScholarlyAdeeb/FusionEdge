@@ -1,0 +1,56 @@
+# FusionEdge -- default run configuration.
+#
+# Every field here is overridden by the experiment configs in this directory via
+# `_base_`, so the baseline and the custom model provably share data pipeline,
+# loss, schedule and seed. Only `run_name`, `model` and the ablation flags differ.
+#
+# Budget note: this was tuned for an RTX 4070 Laptop (8 GiB). `data.batch_size`
+# and `data.crop` interact; if you see an OOM, lower batch_size first, then crop.
+
+run_name: default
+seed: 1234
+deterministic: true      # kernel determinism ON for training; benchmarks override
+device: cuda
+
+dataset:
+  id: MFNet               # provenance registry id (see data/registry/*.json)
+  train_split: train
+  eval_split: val
+
+model:
+  name: fusionedge
+  cfg: {}
+
+data:
+  batch_size: 8
+  num_workers: 4
+  crop: 128               # training crop size; eval always uses full images
+  limit_train: null
+  limit_eval: null
+
+train:
+  epochs: 60
+  lr: 1.0e-4
+  optimizer: adam
+  weight_decay: 0.0
+  scheduler: cosine
+  eta_min: 1.0e-6
+  grad_clip: 1.0
+  amp: true
+  eval_every: 2
+  eval_max_images: null   # set to an int to cap evaluation cost on long runs
+  best_metric: MS_SSIM_ir # the ONE metric `best.pt` is selected on
+
+loss:
+  w_intensity: 8.0
+  w_gradient: 10.0
+  w_ssim: 2.0
+  w_edge: 1.0
+  w_color: 1.0
+  use_edge: true
+
+benchmark:
+  warmup: 50
+  iters: 200
+  sizes: [[128, 128], [480, 640]]
+  dtype: float32

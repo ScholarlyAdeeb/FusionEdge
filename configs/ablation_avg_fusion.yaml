@@ -1,0 +1,15 @@
+# Ablation: replace adaptive fusion with a fixed 0.5/0.5 average of the branches.
+#
+# Same branches, same parameters, same loss. The only change is how the two
+# modalities are combined, so this row answers one question: does a per-pixel,
+# edge-conditioned gate actually help over a static average?
+_base_: default.yaml
+
+run_name: ablation_avg_fusion
+
+model:
+  name: fusionedge
+  cfg:
+    width: 32
+    depth: 2
+    adaptive_fusion: false

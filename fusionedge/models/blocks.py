@@ -115,11 +115,21 @@ class PairedResidualBlock(nn.Module):
     one block instead of two. It also encodes an assumption worth stating --
     "the same local filter is valid in both modalities" -- which the ablation
     (`shared_stem: false`) tests by giving each branch its own weights.
+
+    `block_cls` selects the per-modality block type; the default is the
+    depthwise-separable residual block, and the dense variant is used by the
+    separability ablation so that control is width- and depth-matched.
     """
 
-    def __init__(self, channels: int, k: int = 3, d: int = 1):
+    def __init__(
+        self,
+        channels: int,
+        k: int = 3,
+        d: int = 1,
+        block_cls: type[nn.Module] = ResidualSeparableBlock,
+    ):
         super().__init__()
-        self.block = ResidualSeparableBlock(channels, channels, k=k, d=d)
+        self.block = block_cls(channels, channels, k=k, d=d)
 
     def forward(self, ir: torch.Tensor, vi: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         return self.block(ir), self.block(vi)

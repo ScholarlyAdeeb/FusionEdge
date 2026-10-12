@@ -1,0 +1,18 @@
+# Ablation: remove the edge-aware guidance.
+#
+# The gate still runs, but conditioned on a constant (all-zero) edge channel, so
+# the parameter count is identical to the full model. That isolates the
+# *information* the edge prior provides from the parameters it costs -- if this
+# row is indistinguishable from the full model, the edge head is dead weight and
+# should be deleted from the architecture.
+_base_: default.yaml
+
+run_name: ablation_no_edge
+
+model:
+  name: fusionedge
+  cfg:
+    width: 32
+    depth: 2
+    use_edge_guidance: false
+    adaptive_fusion: true

@@ -1,0 +1,15 @@
+# Ablation: regress the fused RGB image directly instead of predicting a
+# luminance residual on the visible image.
+#
+# Tests the output-parameterisation claim: that keeping chroma from the visible
+# image by construction beats asking the network to invent colour.
+_base_: default.yaml
+
+run_name: ablation_rgb_head
+
+model:
+  name: fusionedge
+  cfg:
+    width: 32
+    depth: 2
+    residual_output: false
