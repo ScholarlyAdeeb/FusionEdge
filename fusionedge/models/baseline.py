@@ -1,0 +1,70 @@
+"""The controlled baseline: a plain dual-input residual CNN.
+
+This is the model every claim about FusionEdge is measured against, so it is
+deliberately uninteresting and deliberately *fair*:
+
+  * same input convention (ir (B,1,H,W), vi (B,3,H,W)),
+  * same output convention (fused (B,3,H,W) in [0,1]),
+  * same loss object, same data pipeline, same schedule, same seed,
+  * same order of magnitude of parameters, so the comparison is not "we made it
+    lighter" but "we made it better at the same size".
+
+Its only structural choices are the two obvious ones: concatenate the two
+modalities, run residual blocks, predict the fused image directly. No attention,
+no edge prior, no cross-modal interaction. If FusionEdge wins, it wins because
+of those, not because of a different budget.
+"""
+
+from __future__ import annotations
+
+import torch
+import torch.nn as nn
+
+from .blocks import ConvBNAct, ResidualSeparableBlock
+
+
+class SimpleCNNBaseline(nn.Module):
+    """Concat -> residual separable blocks -> 3x3 conv head.
+
+    Tensor flow (B = batch, C = width):
+        ir (B,1,H,W) --repeat--> (B,3,H,W) --\
+                                               concat -> (B,6,H,W)
+        vi (B,3,H,W) ------------------/
+        stem   6->C          -> (B,C,H,W)
+        blocks C->C  x depth -> (B,C,H,W)
+        head   C->3          -> (B,3,H,W)
+        clamp to [0,1]
+
+    The IR repeat-to-3 is the one thing here worth calling out: the baseline
+    pays 3*C*1*1 extra stem parameters to make the concat dimension symmetric,
+    which is the standard trick and precisely what FusionEdge's 1-channel IR
+    stem avoids.
+    """
+
+    def __init__(self, width: int = 32, depth: int = 4, use_relu_head: bool = True):
+        super().__init__()
+        self.width = width
+        self.depth = depth
+
+        self.stem = ConvBNAct(6, width, k=3, p=1)
+        self.blocks = nn.Sequential(
+            *[ResidualSeparableBlock(width, width, k=3) for _ in range(depth)]
+        )
+        self.head = nn.Conv2d(width, 3, 3, padding=1)
+        self.act = nn.LeakyReLU(0.2, inplace=True) if use_relu_head else nn.Identity()
+
+    def forward(self, ir: torch.Tensor, vi: torch.Tensor) -> torch.Tensor:
+        if ir.shape[1] == 1:
+            ir = ir.repeat(1, 3, 1, 1)
+        x = torch.cat([ir, vi], dim=1)
+        x = self.stem(x)
+        x = self.blocks(x)
+        x = self.act(self.head(x))
+        return torch.clamp(x, 0.0, 1.0)
+
+
+def build_baseline(cfg: dict | None = None) -> SimpleCNNBaseline:
+    cfg = cfg or {}
+    return SimpleCNNBaseline(
+        width=int(cfg.get("width", 32)), depth=int(cfg.get("depth", 4))
+    )

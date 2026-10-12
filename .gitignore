@@ -1,0 +1,49 @@
+# --- data & downloaded artifacts (provenance registry is committed, binaries are not) ---
+data/MSRS/
+data/MFNet/
+data/synthetic/
+data/*.zip
+data/*.tar*
+data/**/*.png
+data/**/*.jpg
+!data/registry/*.json
+
+# --- run outputs: configs + logs are committed, checkpoints and big artifacts are not ---
+experiments/**/checkpoints/*.pt
+experiments/**/checkpoints/*.pth
+experiments/**/samples/
+results/**/*.png
+results/**/*.jpg
+!results/**/*.md
+!results/README.md
+
+# --- gradio / misc ---
+.cache/
+.gradio/
+*.onnx
+*.engine
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# --- tooling ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# --- OS ---
+.DS_Store
+Thumbs.db

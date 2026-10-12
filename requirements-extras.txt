@@ -1,0 +1,17 @@
+# FusionEdge — optional dependencies (demo, YOLOv5x6 mAP evaluation, dataset download)
+#
+# All three were dry-run resolved against Python 3.14.5 before being listed here
+# (see docs/ENVIRONMENT.md). They are NOT required to train, evaluate, benchmark
+# or unit-test the fusion models.
+
+# Gradio demo (fusionedge/demo.py)
+gradio==6.30.0
+
+# YOLOv5x6 mAP evaluation (fusionedge/metrics/yolo_map.py)
+# Primary backend: ultralytics. Fallback backend: ONNX Runtime (1.30.0 is already
+# installed system-wide); the fallback is tagged in metrics.json as
+# "backend": "onnxruntime" so results are never silently mixed with ultralytics.
+ultralytics==8.4.175
+
+# Dataset acquisition (scripts/download_data.py)
+gdown==6.4.2

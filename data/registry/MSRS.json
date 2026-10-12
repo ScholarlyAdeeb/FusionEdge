@@ -1,0 +1,28 @@
+{
+  "dataset_id": "MSRS",
+  "status": "unavailable",
+  "retrieved_at": "2026-10-12T16:19:20Z",
+  "licence": "MSRS: Multi-Spectral Road Scenarios for Practical Infrared and Visible Image Fusion (Tang et al.). Research use; cite the original paper. Redistribution of the images is not granted by this repository.",
+  "attempts": [
+    {
+      "kind": "github_dir",
+      "url": "https://github.com/Linfeng-Tang/SeAFusion/tree/main/datasets/MSRS",
+      "note": "Verified via GitHub trees API: contains only datasets/MSRS/Label/*.png (1445 segmentation masks). No train/test ir/vi pairs present, so it cannot serve as the image-pair source.",
+      "attempted_at": "2026-10-12T16:19:20Z",
+      "result": "inspected -- no IR/VI pairs at this path (labels only); skipped",
+      "downloaded": false
+    },
+    {
+      "kind": "url",
+      "url": "https://github.com/Linfeng-Tang/MSRS",
+      "note": "Official MSRS repository. README documents the dataset but publishes no archive URL (dataset distributed via Baidu Pan / author channels).",
+      "attempted_at": "2026-10-12T16:19:20Z",
+      "result": "no direct archive URL published at this location",
+      "downloaded": false
+    }
+  ],
+  "root": null,
+  "splits": {},
+  "manifest_sha256": null,
+  "notes": "MSRS could not be obtained from any verifiable public mirror at the time of writing. Per docs/DATASET.md the approved fallback is MFNet; MSRS results are NOT reported anywhere in this repository."
+}

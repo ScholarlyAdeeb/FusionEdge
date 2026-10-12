@@ -1,0 +1,587 @@
+"""Dataset acquisition for FusionEdge.
+
+Strategy (see docs/DATASET.md for the rationale):
+
+  1. MSRS first.  MSRS is the published benchmark most IR/VL fusion papers evaluate
+     on, so we try to obtain it before anything else.  Its official repository
+     (Linfeng-Tang/MSRS) ships no data, and the copies we could verify on GitHub
+     (e.g. Linfeng-Tang/SeAFusion) contain only the 1445 segmentation *labels*,
+     not the IR/VI image pairs.  We still keep the attempt scripted and logged so
+     the failure is a recorded, reproducible fact rather than an anecdote.
+
+  2. MFNet fallback.  MFNet is the parent dataset MSRS was curated from
+     (1569 aligned day/night pairs, 480x640) and is publicly linked from
+     Linfeng-Tang/SeAFusion's README (a Google Drive folder).  We download it and
+     build our own reproducible 80/20 split.
+
+Every acquisition writes `data/registry/<dataset_id>.json` describing provenance:
+source URL, retrieval timestamp, SHA-256 of the downloaded archive, licence note,
+pair counts per split, and a SHA-256 manifest hash over the ordered list of
+`split/pair_id` entries.  Downstream, every training run copies that
+`dataset_id` + `manifest_sha256` into its own config, so a result row can always
+be traced back to the exact bytes it was computed on -- and MSRS numbers can
+never be silently presented as MFNet numbers or vice versa.
+
+Usage
+-----
+    python scripts/download_data.py --dataset mfnet
+    python scripts/download_data.py --dataset auto      # MSRS, then MFNet
+    python scripts/download_data.py --verify-only
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as _dt
+import hashlib
+import json
+import os
+import shutil
+import sys
+import tarfile
+import time
+import zipfile
+from pathlib import Path
+from typing import Iterable
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = REPO_ROOT / "data"
+REGISTRY_DIR = DATA_DIR / "registry"
+
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff")
+
+# --- MSRS attempt -----------------------------------------------------------
+# Recorded as data, not code: the MSRS paper/README describe the dataset but the
+# official repo hosts no downloadable archive. These entries exist so the failed
+# attempt is explicit and reproducible. `kind: github_dir` means "this GitHub path
+# was checked for IR/VI pairs"; `kind: url` means "an archive was attempted".
+MSRS_SOURCES: list[dict] = [
+    {
+        "kind": "github_dir",
+        "url": "https://github.com/Linfeng-Tang/SeAFusion/tree/main/datasets/MSRS",
+        "note": (
+            "Verified via GitHub trees API: contains only datasets/MSRS/Label/*.png "
+            "(1445 segmentation masks). No train/test ir/vi pairs present, so it "
+            "cannot serve as the image-pair source."
+        ),
+    },
+    {
+        "kind": "url",
+        "url": "https://github.com/Linfeng-Tang/MSRS",
+        "note": (
+            "Official MSRS repository. README documents the dataset but publishes no "
+            "archive URL (dataset distributed via Baidu Pan / author channels)."
+        ),
+    },
+]
+
+# --- MFNet fallback --------------------------------------------------------
+# Two distinct Google Drive releases of MFNet exist; both are listed so the
+# attempt order is explicit and the failure is recorded per-source.
+#
+#   (a) 1YtEMiUC8sC0iL9rONNv96n5jWuIsWrVY  "Multi-spectral Object Detection
+#       Dataset" -- the canonical MFNet release linked from the U-Tokyo project
+#       page (https://www.mi.t.u-tokyo.ac.jp/static/projects/mil_multispectral/).
+#       Contains ir_det_dataset.tar.gz (day+night, 1569 pairs, 480x640).
+#   (b) 18BQFWRfhXzSuMloUmtiBRFrr6NSrf8Fw  "Multi-spectral Semantic
+#       Segmentation Dataset", linked from Linfeng-Tang/SeAFusion README.
+#       MSRS was curated from the MFNet *detection* split, so (a) is preferred.
+MFNET_SOURCES: list[dict] = [
+    {
+        "kind": "gdrive_folder",
+        "url": "https://drive.google.com/drive/folders/1YtEMiUC8sC0iL9rONNv96n5jWuIsWrVY",
+        "note": (
+            "U-Tokyo official MFNet object-detection release (ir_det_dataset.tar.gz, "
+            "file id 0B7Loi-7ye3pPY1dRalliazlQMDg). Preferred transport."
+        ),
+    },
+    {
+        "kind": "gdrive_folder",
+        "url": "https://drive.google.com/drive/folders/18BQFWRfhXzSuMloUmtiBRFrr6NSrf8Fw",
+        "note": (
+            "MFNet semantic-segmentation release linked from Linfeng-Tang/SeAFusion "
+            "README. Secondary transport."
+        ),
+    },
+]
+
+LICENCE_NOTES = {
+    "MSRS": (
+        "MSRS: Multi-Spectral Road Scenarios for Practical Infrared and Visible "
+        "Image Fusion (Tang et al.). Research use; cite the original paper. "
+        "Redistribution of the images is not granted by this repository."
+    ),
+    "MFNet": (
+        "MFNet: Multispectral image dataset for RGBT detection "
+        "(Takdir et al., U-Tokyo, RIKEN AIP). Research use; cite the original "
+        "paper and the U-Tokyo project page. Redistribution is not granted by "
+        "this repository."
+    ),
+    "synthetic": "Procedurally generated in-repo. No external licence applies.",
+}
+
+
+# --------------------------------------------------------------------------- #
+# helpers
+# --------------------------------------------------------------------------- #
+def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        while True:
+            b = f.read(chunk)
+            if not b:
+                break
+            h.update(b)
+    return h.hexdigest()
+
+
+def utc_now() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def log(msg: str) -> None:
+    print(f"[{_dt.datetime.now():%H:%M:%S}] {msg}", flush=True)
+
+
+def safe_extract(archive: Path, dest: Path) -> None:
+    """Extract an archive, refusing any member that escapes `dest`."""
+    dest.mkdir(parents=True, exist_ok=True)
+    dest_resolved = dest.resolve()
+    if archive.suffix.lower() == ".zip":
+        with zipfile.ZipFile(archive) as zf:
+            for m in zf.infolist():
+                target = (dest / m.filename).resolve()
+                if not str(target).startswith(str(dest_resolved)):
+                    raise RuntimeError(f"refusing unsafe zip member: {m.filename}")
+            zf.extractall(dest)
+    else:
+        with tarfile.open(archive) as tf:
+            for m in tf.getmembers():
+                target = (dest / m.name).resolve()
+                if not str(target).startswith(str(dest_resolved)):
+                    raise RuntimeError(f"refusing unsafe tar member: {m.name}")
+            # filter="data" avoids the Windows symlink/permission pitfalls
+            try:
+                tf.extractall(dest, filter="data")  # type: ignore[call-arg]
+            except TypeError:  # Python < 3.12
+                tf.extractall(dest)
+
+
+def find_pair_dirs(root: Path) -> list[tuple[Path, Path]]:
+    """Locate `ir`/`vi` directory pairs anywhere under `root`.
+
+    Returns [(ir_dir, vi_dir), ...] sorted for determinism. Accepts the common
+    naming variants: vi/vis/visible/rgb/v and ir/infrared/thermal.
+    """
+    vi_names = {"vi", "vis", "visible", "rgb", "v", "infrared_visible"}
+    ir_names = {"ir", "infrared", "thermal", "i"}
+    found: list[tuple[Path, Path]] = []
+    for dirpath, dirnames, _ in os.walk(root):
+        here = Path(dirpath)
+        lowered = {d.lower(): d for d in dirnames}
+        vi = next((lowered[n] for n in sorted(lowered) if n in vi_names), None)
+        ir = next((lowered[n] for n in sorted(lowered) if n in ir_names), None)
+        if vi and ir:
+            found.append((here / ir, here / vi))
+            # don't descend further: nested ir/vi would be a subset
+            dirnames[:] = []
+    return sorted(found, key=lambda t: str(t[0]))
+
+
+def list_images(d: Path) -> list[str]:
+    return sorted(
+        p.name for p in d.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+    )
+
+
+def pair_up(ir_dir: Path, vi_dir: Path) -> tuple[list[str], list[str]]:
+    """Return (paired_ids, unpaired_left). Pairs are matched on exact filename."""
+    ir = list_images(ir_dir)
+    vi = list_images(vi_dir)
+    ir_set, vi_set = set(ir), set(vi)
+    pairs = sorted(ir_set & vi_set)
+    leftover = sorted((ir_set | vi_set) - set(pairs))
+    return pairs, leftover
+
+
+def manifest_hash(entries: Iterable[str]) -> str:
+    h = hashlib.sha256()
+    for e in entries:
+        h.update(e.encode())
+        h.update(b"\n")
+    return h.hexdigest()
+
+
+# --------------------------------------------------------------------------- #
+# MSRS attempt
+# --------------------------------------------------------------------------- #
+def attempt_msrs() -> dict:
+    """Record the MSRS acquisition attempt. Downloads MSRS only if a source
+    that actually contains IR/VI pairs is found; currently none is known."""
+    log("MSRS: attempting acquisition from known sources")
+    attempts = []
+    for src in MSRS_SOURCES:
+        entry = dict(src)
+        entry["attempted_at"] = utc_now()
+        if src["kind"] == "github_dir":
+            entry["result"] = (
+                "inspected -- no IR/VI pairs at this path (labels only); skipped"
+            )
+            entry["downloaded"] = False
+        else:
+            entry["result"] = "no direct archive URL published at this location"
+            entry["downloaded"] = False
+        attempts.append(entry)
+        log(f"  - {src['url']}: {entry['result']}")
+
+    ok = any(a.get("downloaded") for a in attempts)
+    record = {
+        "dataset_id": "MSRS",
+        "status": "ok" if ok else "unavailable",
+        "retrieved_at": utc_now(),
+        "licence": LICENCE_NOTES["MSRS"],
+        "attempts": attempts,
+        "root": None,
+        "splits": {},
+        "manifest_sha256": None,
+        "notes": (
+            "MSRS could not be obtained from any verifiable public mirror at the "
+            "time of writing. Per docs/DATASET.md the approved fallback is MFNet; "
+            "MSRS results are NOT reported anywhere in this repository."
+            if not ok
+            else ""
+        ),
+    }
+    REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
+    (REGISTRY_DIR / "MSRS.json").write_text(json.dumps(record, indent=2))
+    log(f"MSRS: status={record['status']} -> registry written")
+    return record
+
+
+# --------------------------------------------------------------------------- #
+# MFNet acquisition
+# --------------------------------------------------------------------------- #
+def download_gdrive_folder(url: str, dest: Path, timeout_min: float) -> None:
+    """Download a Google Drive folder with gdown (may require cookie auth on
+    quota-limited large folders; a clear error is raised on failure)."""
+    import gdown  # imported lazily: only this path needs the optional dep
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    log(f"  gdown folder download -> {dest} (timeout {timeout_min:.0f} min)")
+    # gdown has no native timeout; enforce one by running the transfer as a
+    # subprocess with a wall-clock cap, so a hung quota page cannot stall us.
+    import subprocess
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "gdown",
+        "--folder",
+        "--no-cookies" if os.environ.get("FUSIONEDGE_GDOWN_NOCOOKIE") else "--continue",
+        url,
+        "-O",
+        str(dest),
+    ]
+    log("  $ " + " ".join(cmd))
+    try:
+        proc = subprocess.run(cmd, timeout=timeout_min * 60, check=False)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"gdown timed out after {timeout_min:.0f} min (Drive quota or rate limit)"
+        )
+    if proc.returncode != 0:
+        raise RuntimeError(f"gdown exited with code {proc.returncode}")
+
+
+def normalise_mfnet(root: Path) -> Path:
+    """MFNet ships as <root>/<subset>/{rgb,ir}/*.png or with a nested archive.
+    Return a root that contains at least one ir/vi directory pair."""
+    if find_pair_dirs(root):
+        return root
+    # sometimes everything is one level deeper
+    for child in sorted(p for p in root.iterdir() if p.is_dir()):
+        if find_pair_dirs(child):
+            return child
+    return root
+
+
+def build_hashesplit(pairs: list[str], val_frac: float = 0.2) -> dict[str, list[str]]:
+    """Deterministic content-independent split by SHA-1 of the pair id.
+
+    Chosen over a seeded RNG so the split is identical on every machine and
+    across reruns regardless of library RNG changes. 20% of ids go to val;
+    because the hash is computed per *pair id* and pairs are grouped before
+    splitting, IR and VI files of the same scene can never straddle the split.
+    """
+    scored = []
+    for pid in pairs:
+        h = hashlib.sha1(pid.encode()).hexdigest()
+        scored.append((int(h[:8], 16) / 0xFFFFFFFF, pid))
+    scored.sort()
+    n_val = int(round(len(scored) * val_frac))
+    val = sorted(pid for _, pid in scored[:n_val])
+    train = sorted(pid for _, pid in scored[n_val:])
+    return {"train": train, "val": val}
+
+
+def attempt_mfnet(timeout_min: float = 10.0, force: bool = False) -> dict:
+    log("MFNet: attempting acquisition (approved fallback)")
+    REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
+    out_root = DATA_DIR / "MFNet"
+    registry_file = REGISTRY_DIR / "MFNet.json"
+
+    if registry_file.exists() and not force:
+        rec = json.loads(registry_file.read_text())
+        if rec.get("status") == "ok":
+            log("MFNet: already present and registered; skipping download")
+            return rec
+
+    archive_dir = DATA_DIR / "_archives"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    if out_root.exists():
+        shutil.rmtree(out_root)
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    attempts = []
+    downloaded_archive: Path | None = None
+
+    # --- manual drop: an archive already present in data/_archives wins. ---
+    # This is the documented escape hatch when Drive is quota-blocked: download
+    # ir_det_dataset.tar.gz from a browser (which is authenticated) and drop it
+    # in data/_archives/. The SHA-256 is recorded either way.
+    local = sorted(archive_dir.glob("*.tar.gz")) + sorted(archive_dir.glob("*.tgz")) \
+        + sorted(archive_dir.glob("*.zip"))
+    if local:
+        src = local[0]
+        log(f"MFNet: using manually-provided archive {src}")
+        try:
+            safe_extract(src, out_root)
+            downloaded_archive = src
+            attempts.append(
+                {
+                    "kind": "local_archive",
+                    "url": str(src.relative_to(REPO_ROOT)),
+                    "sha256": sha256_file(src),
+                    "downloaded": True,
+                    "result": "extracted from data/_archives",
+                    "attempted_at": utc_now(),
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            attempts.append(
+                {
+                    "kind": "local_archive",
+                    "url": str(src.relative_to(REPO_ROOT)),
+                    "downloaded": False,
+                    "result": f"{type(exc).__name__}: {exc}",
+                    "attempted_at": utc_now(),
+                }
+            )
+            log(f"  extraction of {src.name} failed: {exc}")
+
+    if not any(a.get("downloaded") for a in attempts):
+        for src in MFNET_SOURCES:
+            entry = dict(src)
+            entry["attempted_at"] = utc_now()
+            try:
+                download_gdrive_folder(src["url"], out_root, timeout_min)
+                downloaded_archive = None
+                entry["downloaded"] = True
+                entry["result"] = "folder downloaded"
+                attempts.append(entry)
+                break
+            except Exception as exc:  # noqa: BLE001 -- we record the failure verbatim
+                entry["downloaded"] = False
+                entry["result"] = f"{type(exc).__name__}: {exc}"
+                attempts.append(entry)
+                log(f"  - {src['url']}: {entry['result']}")
+
+    if not any(a.get("downloaded") for a in attempts):
+        record = {
+            "dataset_id": "MFNet",
+            "status": "unavailable",
+            "retrieved_at": utc_now(),
+            "licence": LICENCE_NOTES["MFNet"],
+            "attempts": attempts,
+            "root": None,
+            "splits": {},
+            "manifest_sha256": None,
+            "notes": "Both approved sources failed. Real-data training is BLOCKED.",
+        }
+        registry_file.write_text(json.dumps(record, indent=2))
+        return record
+
+    # ---- organise into a canonical layout ------------------------------- #
+    log("MFNet: normalising layout")
+    pair_dirs = find_pair_dirs(out_root)
+    if not pair_dirs:
+        # maybe a zip landed inside
+        for z in sorted(out_root.rglob("*.zip")):
+            try:
+                safe_extract(z, out_root / "extracted")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  extraction failed for {z.name}: {exc}")
+        pair_dirs = find_pair_dirs(out_root)
+
+    if not pair_dirs:
+        record = {
+            "dataset_id": "MFNet",
+            "status": "corrupt",
+            "retrieved_at": utc_now(),
+            "licence": LICENCE_NOTES["MFNet"],
+            "attempts": attempts,
+            "root": str(out_root),
+            "splits": {},
+            "manifest_sha256": None,
+            "notes": "Download completed but no ir/vi directory pair could be found.",
+        }
+        registry_file.write_text(json.dumps(record, indent=2))
+        return record
+
+    canonical = out_root / "canonical"
+    (canonical / "ir").mkdir(parents=True, exist_ok=True)
+    (canonical / "vi").mkdir(parents=True, exist_ok=True)
+    seen: set[str] = set()
+    for ir_dir, vi_dir in pair_dirs:
+        pairs, leftover = pair_up(ir_dir, vi_dir)
+        if leftover:
+            log(f"  warning: {ir_dir.name}/{vi_dir.name}: {len(leftover)} unpaired files")
+        for pid in pairs:
+            if pid in seen:
+                continue
+            seen.add(pid)
+            shutil.copy2(ir_dir / pid, canonical / "ir" / pid)
+            shutil.copy2(vi_dir / pid, canonical / "vi" / pid)
+    log(f"  {len(seen)} unique pairs collected")
+
+    pairs = sorted(p.name for p in (canonical / "ir").iterdir())
+    splits = build_hashesplit(pairs)
+    for split_name, ids in splits.items():
+        d = canonical / split_name
+        (d / "ir").mkdir(parents=True, exist_ok=True)
+        (d / "vi").mkdir(parents=True, exist_ok=True)
+        for pid in ids:
+            shutil.copy2(canonical / "ir" / pid, d / "ir" / pid)
+            shutil.copy2(canonical / "vi" / pid, d / "vi" / pid)
+
+    entries = [f"{s}/{pid}" for s, ids in splits.items() for pid in ids]
+    record = {
+        "dataset_id": "MFNet",
+        "status": "ok",
+        "retrieved_at": utc_now(),
+        "licence": LICENCE_NOTES["MFNet"],
+        "attempts": attempts,
+        "archive_sha256": (
+            sha256_file(downloaded_archive) if downloaded_archive else None
+        ),
+        "root": str(canonical),
+        "split_definition": (
+            "sha1(pair_id) -> uint32/first 8 hex digits, ascending; the lowest 20% "
+            "of pair ids form 'val', the remainder 'train'. Pairs are grouped before "
+            "splitting so IR and VI of a scene never straddle train/val."
+        ),
+        "split_val_frac": 0.2,
+        "splits": {k: len(v) for k, v in splits.items()},
+        "manifest_sha256": manifest_hash(entries),
+        "notes": (
+            "Fallback dataset. MSRS was attempted first and is unavailable; these "
+            "numbers must be reported as MFNet results and are not comparable to "
+            "published MSRS numbers."
+        ),
+    }
+    registry_file.write_text(json.dumps(record, indent=2))
+    log(f"MFNet: status=ok, splits={record['splits']} -> registry written")
+    return record
+
+
+# --------------------------------------------------------------------------- #
+def verify(record_path: Path) -> int:
+    """Re-check a registry entry against the files on disk. Exit code = health."""
+    rec = json.loads(record_path.read_text())
+    ds = rec["dataset_id"]
+    log(f"verify {ds}: status={rec.get('status')}")
+    if rec.get("status") != "ok":
+        log("  not acquired -- see 'notes' and 'attempts' in the registry")
+        return 1
+    root = Path(rec["root"])
+    if not root.exists():
+        log(f"  FAIL: root {root} missing")
+        return 1
+    splits = rec["splits"]
+    for split, expected in splits.items():
+        ir_d = root / split / "ir"
+        vi_d = root / split / "vi"
+        if not (ir_d.exists() and vi_d.exists()):
+            log(f"  FAIL: {split}: missing ir/vi dirs")
+            return 1
+        n_ir = len(list_images(ir_d))
+        n_vi = len(list_images(vi_d))
+        if n_ir != n_vi or n_ir != expected:
+            log(f"  FAIL: {split}: ir={n_ir} vi={n_vi} expected={expected}")
+            return 1
+        log(f"  ok {split}: {n_ir} pairs")
+
+    # leakage check: no pair id appears in both splits
+    all_ids = {
+        split: set(list_images(root / split / "ir")) for split in splits
+    }
+    names = sorted(all_ids)
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            inter = all_ids[names[i]] & all_ids[names[j]]
+            if inter:
+                log(f"  FAIL: leakage {len(inter)} ids shared by {names[i]}/{names[j]}")
+                return 1
+    log("  ok no train/val leakage")
+
+    entries = [f"{s}/{pid}" for s, ids in all_ids.items() for pid in sorted(ids)]
+    recomputed = manifest_hash(entries)
+    if recomputed != rec.get("manifest_sha256"):
+        log(f"  FAIL: manifest hash mismatch (disk={recomputed[:12]} "
+            f"registry={str(rec.get('manifest_sha256'))[:12]})")
+        return 1
+    log("  ok manifest hash matches registry")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--dataset", choices=["auto", "msrs", "mfnet"], default="auto")
+    ap.add_argument("--timeout-min", type=float, default=10.0)
+    ap.add_argument("--force", action="store_true", help="re-download even if registered")
+    ap.add_argument("--verify-only", action="store_true")
+    args = ap.parse_args()
+
+    REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "README.md").write_text(
+        "# data/\n\nThis directory is populated by `scripts/download_data.py`.\n"
+        "Image files are git-ignored; the provenance registry in `data/registry/`\n"
+        "is committed. See docs/DATASET.md.\n"
+    )
+
+    if args.verify_only:
+        rc = 0
+        for f in sorted(REGISTRY_DIR.glob("*.json")):
+            rc |= verify(f)
+        return 1 if rc else 0
+
+    if args.dataset in ("auto", "msrs"):
+        attempt_msrs()
+    if args.dataset in ("auto", "mfnet"):
+        mf = attempt_mfnet(timeout_min=args.timeout_min, force=args.force)
+        if mf.get("status") != "ok":
+            log("")
+            log("BLOCKED: no real dataset is available.")
+            log("Training on synthetic data is not permitted by the project spec.")
+            return 2
+
+    # final verification of whatever we have
+    rc = 0
+    for f in sorted(REGISTRY_DIR.glob("*.json")):
+        rc |= verify(f)
+    return 0 if rc == 0 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

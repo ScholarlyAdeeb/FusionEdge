@@ -1,0 +1,23 @@
+# FusionEdge — pinned core dependencies
+#
+# Verified on this machine (Python 3.14.5, Windows, CUDA 13.4 driver):
+#   pip install -r requirements.txt        # installs nothing new, all already present
+#   pip install -r requirements-extras.txt  # optional: demo + YOLO mAP + dataset download
+#
+# MS-SSIM, SSIM, Sobel and all fusion metrics are implemented in
+# fusionedge/metrics + fusionedge/losses in pure torch/numpy and are unit-tested
+# against scikit-image references (tests/test_metrics.py). No metric is delegated
+# to an unversioned third-party implementation.
+
+torch==2.12.1+cu126
+torchvision==0.27.1+cu126
+numpy==2.5.0
+opencv-python==5.0.0.93
+scikit-image==0.26.0
+scipy==1.18.0
+pillow==12.3.0
+PyYAML==6.0.3
+tqdm==4.68.2
+matplotlib==3.11.0
+tensorboard==2.21.0
+pytest==9.1.1
