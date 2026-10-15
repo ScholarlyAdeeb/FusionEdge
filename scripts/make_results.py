@@ -173,7 +173,7 @@ def main() -> int:
                              "verdict sits exactly on the rule's threshold")
     if not seed:
         open_items.insert(0, "seeds 1235 and 1236 for baseline + inject and FusionEdge")
-    L += ["", "## Observed trade-offs", "",
+    L += ["", "## What I take from it", "",
           "- **Head vs backbone.** On seed 1234, swapping v6's Y head for the inject head (same backbone) raises MI, "
           "EN and SSIM_vi and lowers SSIM_ir and MS-SSIM_ir. It also stops v6's global darkening and its brightening "
           "outside IR-brighter areas. Swapping the baseline backbone for FusionEdge's (same head) gives a 4–4 split "
@@ -196,13 +196,13 @@ def main() -> int:
            if seed and "NOT" in seed["verdict"] else
            "- **The FusionEdge backbone's advantage over the plain backbone is not established.** "
            + ("See the seed verdict above." if seed else "One seed cannot settle it; the seed repeats are the test.")),
-          ] + (["", "## Recommendation", "",
-                "**Recommended model: `baseline_simplecnn_inject`** (baseline backbone + inject head; checkpoint "
+          ] + (["", "## What I would use", "",
+                "**`baseline_simplecnn_inject`**, the baseline backbone with the inject head (checkpoint "
                 "`experiments/baseline_simplecnn_inject/checkpoints/last.pt`). Under the pre-registered rule it matches or "
                 f"beats FusionEdge on {seed['baseline_inject_matches_or_beats']} of 8 holdout metrics. It is stable "
                 "across seeds, 2.8× faster, and has 1.7× fewer parameters. "
-                "**FusionEdge is a documented negative result**: its backbone is not supported as an improvement."]
-               if seed and "NOT" in seed["verdict"] else []) + ["", "## Not done", ""] + [f"- {x}" for x in open_items] + [
+                "FusionEdge stays in the repo as a negative result: its backbone did not hold up as an improvement."]
+               if seed and "NOT" in seed["verdict"] else []) + ["", "## Not done yet", ""] + [f"- {x}" for x in open_items] + [
           "- No comparison with published fusion methods: AG and SF here are not on the published scale, and no "
           "external method was re-run under this protocol.",
           "", "Failed and superseded runs, with explanations, are listed in [EXPERIMENTS.md](EXPERIMENTS.md)."]

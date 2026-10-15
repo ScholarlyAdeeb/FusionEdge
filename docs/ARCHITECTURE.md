@@ -1,6 +1,6 @@
 # Architecture
 
-This page describes the three models compared in [RESULTS.md](RESULTS.md), the output head they share, and the training loss. Every tensor shape and parameter count below comes from forward hooks on the trained configurations at a 480×640 input (batch 1). Nothing is taken from intent.
+This page describes the three models compared in [RESULTS.md](RESULTS.md), the output head they share, and the training loss. The tensor shapes and parameter counts were measured with forward hooks on the trained configurations at a 480×640 input (batch 1), not copied from the design notes.
 
 ## Inputs and outputs (all models)
 
