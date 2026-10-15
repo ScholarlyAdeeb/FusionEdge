@@ -1,0 +1,13 @@
+﻿05:53:22  baseline_simplecnn_inject_s1236 pipeline (configs\baseline_inject_s1236.yaml) 20261015_055322  root=D:\Projects\Sam
+05:53:22  python: C:\Python314\python.exe  Python 3.14.5
+05:53:26  cuda: True NVIDIA GeForce RTX 4070 Laptop GPU
+05:53:26  1/4 pytest -> D:\Projects\Sam\results\baseline_simplecnn_inject_s1236\pytest_20261015_055322.txt
+05:54:38      pytest exit 0 : 378 passed, 2 warnings in 65.12s (0:01:05)
+05:54:38  2/4 pre-flight -> D:\Projects\Sam\results\baseline_simplecnn_inject_s1236\preflight_20261015_055322.txt
+05:55:44      info: OLD in-autocast path vs fp64: loss rel err 2.35e-01, grad cos -0.00604  (v3-v5 trained on this)
+05:55:44      PREFLIGHT PASSED: 35/35 checks  -> results/preflight/preflight_v6_20261015_055441.json
+05:55:44  3/4 training baseline_simplecnn_inject_s1236 (dashboard window opening)
+06:45:39      run_experiment exit 0 after 49.9 min
+06:45:39  4/4 audit + gate
+06:46:07      audit PASS, gate PASS
+06:46:08  baseline_simplecnn_inject_s1236 complete and accepted by the automated gate. Visual review pending. Nothing else started.

@@ -1,0 +1,1 @@
+superseded by baseline_simplecnn_v6: loss computed under bf16 autocast, see NOTES.md

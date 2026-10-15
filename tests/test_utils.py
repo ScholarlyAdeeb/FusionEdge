@@ -57,6 +57,16 @@ def test_deterministic_mode_is_reversible():
     assert torch.equal(x, torch.rand(4))
 
 
+def test_deterministic_mode_disables_tf32():
+    """TF32 convs gave ~2e-3 output gaps between memory layouts in "fp32"."""
+    seed_everything(7, deterministic=True)
+    assert not torch.backends.cudnn.allow_tf32
+    assert not torch.backends.cuda.matmul.allow_tf32
+    seed_everything(7, deterministic=False)
+    assert torch.backends.cudnn.allow_tf32
+    assert torch.backends.cuda.matmul.allow_tf32
+
+
 def test_worker_init_fn_is_picklable():
     """Regression: a closure here breaks every multi-worker DataLoader on Windows.
 

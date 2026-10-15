@@ -1,0 +1,12 @@
+﻿01:15:09  fusionedge pipeline 20261015_011509  root=D:\Projects\Sam
+01:15:09  python: C:\Python314\python.exe  Python 3.14.5
+01:15:14  cuda: True NVIDIA GeForce RTX 4070 Laptop GPU
+01:15:14  1/4 pytest -> D:\Projects\Sam\results\fusionedge\pytest_20261015_011509.txt
+01:16:06      pytest exit 0 : 372 passed, 2 warnings in 46.19s
+01:16:06  2/4 pre-flight -> D:\Projects\Sam\results\fusionedge\preflight_20261015_011509.txt
+01:17:02      [FAIL] A smooth-term gradient matches fp64              intensity+ssim+... min cos 0.8064530
+01:17:02      info: OLD in-autocast path vs fp64: loss rel err 1.89e-01, grad cos -0.00982  (v3-v5 trained on this)
+01:17:02      [FAIL] B train loss falls (epoch 3 < 0.8 x epoch 1)     0.866 -> 0.810 -> 0.850
+01:17:02      PREFLIGHT FAILED: 32/34 checks  -> results/preflight/preflight_v6_20261015_011609.json
+01:17:02  STOP: pre-flight failed
+01:17:02  nothing else was started. log: D:\Projects\Sam\results\fusionedge\fusionedge_20261015_011509.txt

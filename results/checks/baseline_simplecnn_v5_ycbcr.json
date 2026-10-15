@@ -1,0 +1,218 @@
+{
+  "run": "baseline_simplecnn_v5_ycbcr",
+  "passed": false,
+  "checks": [
+    {
+      "check": "all train losses finite",
+      "pass": true,
+      "detail": "60 epochs logged"
+    },
+    {
+      "check": "completed configured epochs",
+      "pass": true,
+      "detail": "60/60"
+    },
+    {
+      "check": "loss decreased >=10% (tail5 vs ep0)",
+      "pass": false,
+      "detail": "7.1938 -> 6.8512 (+4.8%)"
+    },
+    {
+      "check": "tail5 loss coefficient of variation",
+      "pass": true,
+      "detail": "0.0029 (info)"
+    },
+    {
+      "check": "last.pt strict reload",
+      "pass": true,
+      "detail": "experiments\\baseline_simplecnn_v5_ycbcr\\checkpoints\\last.pt"
+    },
+    {
+      "check": "checkpoint epoch == configured",
+      "pass": true,
+      "detail": "epoch=60 global_step=7260"
+    },
+    {
+      "check": "checkpoint has scheduler state",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "check": "forward pass deterministic",
+      "pass": true,
+      "detail": "2 images, fp32, run twice"
+    },
+    {
+      "check": "saturation < 5%",
+      "pass": false,
+      "detail": "0.2925"
+    },
+    {
+      "check": "corr(fused, ir) > 0 (mean)",
+      "pass": false,
+      "detail": "-0.142"
+    },
+    {
+      "check": "corr(fused, vi) > 0 (mean)",
+      "pass": false,
+      "detail": "-0.610"
+    },
+    {
+      "check": "contrast >= 50% of weaker source",
+      "pass": true,
+      "detail": "2.997"
+    },
+    {
+      "check": "not a copy of visible",
+      "pass": true,
+      "detail": "mean|dY|=0.4221"
+    },
+    {
+      "check": "carries IR beyond visible",
+      "pass": false,
+      "detail": "corr(f,ir)=-0.142 vs corr(vi,ir)=0.056 (need +0.05)"
+    },
+    {
+      "check": "chroma faithful to visible",
+      "pass": true,
+      "detail": "mean|dCbCr|=0.0147"
+    }
+  ],
+  "holdout": {
+    "n": 16,
+    "run": {
+      "EN": 4.954319664217558,
+      "AG": 0.01193155062417352,
+      "SF": 0.04296350797090913,
+      "MI": 1.5892297314201205,
+      "SSIM_ir": 0.3062975872308016,
+      "SSIM_vi": 0.07556106947595254,
+      "MS_SSIM_ir": 0.29180956613803666,
+      "MS_SSIM_vi": 0.0
+    },
+    "identity_vi": {
+      "EN": 7.320948591803838,
+      "AG": 0.03276102046850385,
+      "SF": 0.08632805573431881,
+      "MI": 7.829617158905117,
+      "SSIM_ir": 0.28825292736291885,
+      "SSIM_vi": 1.0,
+      "MS_SSIM_ir": 0.22827232571877257,
+      "MS_SSIM_vi": 1.0
+    }
+  },
+  "val_curve": {
+    "val_AG": [
+      0.01267,
+      0.01051,
+      0.01085,
+      0.0115,
+      0.01059,
+      0.01002,
+      0.01046,
+      0.01034,
+      0.01071,
+      0.01053,
+      0.01059,
+      0.01089
+    ],
+    "val_EN": [
+      4.76858,
+      4.18291,
+      4.34421,
+      4.58956,
+      4.44566,
+      4.3143,
+      4.59162,
+      4.63501,
+      4.6739,
+      4.69981,
+      4.65091,
+      4.73077
+    ],
+    "val_MI": [
+      1.42951,
+      1.24419,
+      1.45024,
+      1.48586,
+      1.46835,
+      1.35611,
+      1.48837,
+      1.48348,
+      1.5098,
+      1.5261,
+      1.51411,
+      1.52899
+    ],
+    "val_MS_SSIM_ir": [
+      0.25542,
+      0.27311,
+      0.27098,
+      0.26677,
+      0.27731,
+      0.28557,
+      0.27003,
+      0.26426,
+      0.26446,
+      0.26834,
+      0.26011,
+      0.2605
+    ],
+    "val_MS_SSIM_vi": [
+      0.00457,
+      0.00501,
+      0.00757,
+      0.00598,
+      0.00791,
+      0.01339,
+      0.01024,
+      0.01046,
+      0.00718,
+      0.01008,
+      0.01411,
+      0.01037
+    ],
+    "val_SF": [
+      0.04543,
+      0.04184,
+      0.04544,
+      0.04729,
+      0.04287,
+      0.03937,
+      0.04001,
+      0.03863,
+      0.04095,
+      0.03989,
+      0.03992,
+      0.04071
+    ],
+    "val_SSIM_ir": [
+      0.22749,
+      0.23816,
+      0.23025,
+      0.22557,
+      0.23494,
+      0.24368,
+      0.23773,
+      0.23763,
+      0.23865,
+      0.2373,
+      0.23485,
+      0.23925
+    ],
+    "val_SSIM_vi": [
+      0.1105,
+      0.11936,
+      0.11597,
+      0.09866,
+      0.10823,
+      0.11523,
+      0.1132,
+      0.11698,
+      0.10745,
+      0.11324,
+      0.11774,
+      0.11306
+    ]
+  }
+}

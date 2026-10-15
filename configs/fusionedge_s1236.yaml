@@ -1,0 +1,10 @@
+# Seed repeat of fusionedge_main (docs/PROTOCOL.md, "Seed repeats"). Identical to
+# fusionedge.yaml except the seed and the data-loader seed, which together change the
+# weight init, the batch order and every random crop/flip.
+_base_: fusionedge.yaml
+
+run_name: fusionedge_main_s1236
+seed: 1236
+
+data:
+  loader_seed: 1236

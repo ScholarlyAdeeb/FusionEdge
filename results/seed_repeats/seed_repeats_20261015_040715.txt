@@ -1,0 +1,9 @@
+﻿04:07:15  [1/4] start baseline_simplecnn_inject_s1235 (configs\baseline_inject_s1235.yaml)
+04:54:03  [1/4] baseline_simplecnn_inject_s1235 exit 0, gate passed: True, 46.8 min
+04:54:03  [2/4] start fusionedge_main_s1235 (configs\fusionedge_s1235.yaml)
+05:53:21  [2/4] fusionedge_main_s1235 exit 0, gate passed: True, 59.3 min
+05:53:21  [3/4] start baseline_simplecnn_inject_s1236 (configs\baseline_inject_s1236.yaml)
+06:46:08  [3/4] baseline_simplecnn_inject_s1236 exit 0, gate passed: True, 52.8 min
+06:46:08  [4/4] start fusionedge_main_s1236 (configs\fusionedge_s1236.yaml)
+07:45:52  [4/4] fusionedge_main_s1236 exit 0, gate passed: True, 59.7 min
+07:45:52  all 4 seed repeats complete and accepted

@@ -1,0 +1,99 @@
+{
+  "run_name": "baseline_simplecnn_inject_s1236",
+  "seed": 1236,
+  "deterministic": true,
+  "device": "cuda",
+  "dataset": {
+    "id": "MSRS",
+    "train_split": "train",
+    "eval_split": "val"
+  },
+  "model": {
+    "name": "baseline",
+    "cfg": {
+      "width": 32,
+      "depth": 4,
+      "use_relu_head": false,
+      "output_space": "inject"
+    }
+  },
+  "data": {
+    "batch_size": 8,
+    "num_workers": 4,
+    "crop": 128,
+    "limit_train": null,
+    "limit_eval": null,
+    "holdout_frac": 0.1,
+    "holdout_seed": 0,
+    "loader_seed": 1236
+  },
+  "train": {
+    "epochs": 60,
+    "lr": 0.0001,
+    "optimizer": "adam",
+    "weight_decay": 0.0,
+    "scheduler": "cosine",
+    "eta_min": 1e-06,
+    "grad_clip": 1.0,
+    "amp": true,
+    "amp_dtype": "bfloat16",
+    "max_nonfinite_streak": 25,
+    "eval_every": 5,
+    "eval_max_images": null,
+    "best_metric": "MS_SSIM_ir",
+    "final_weights": "last",
+    "progress": "always"
+  },
+  "loss": {
+    "w_intensity": 8.0,
+    "w_gradient": 10.0,
+    "w_ssim": 2.0,
+    "w_edge": 1.0,
+    "w_color": 1.0,
+    "use_edge": true
+  },
+  "benchmark": {
+    "warmup": 50,
+    "iters": 200,
+    "sizes": [
+      [
+        128,
+        128
+      ],
+      [
+        480,
+        640
+      ]
+    ],
+    "dtype": "float32"
+  },
+  "_config_path": "configs\\baseline_inject_s1236.yaml",
+  "_stamped": {
+    "at": "2026-10-15T00:25:51Z",
+    "git_commit": "93bf5dcb2a9c5f83e55f483430dd84ce51e322ff",
+    "environment": {
+      "python": "20261015",
+      "torch": "2.12.1+cu126",
+      "cuda_available": true,
+      "cuda": "12.6",
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+      "capability": "8.9"
+    },
+    "argv": [
+      "scripts\\run_experiment.py",
+      "--config",
+      "configs\\baseline_inject_s1236.yaml",
+      "--progress",
+      "always"
+    ],
+    "dataset_id": "MSRS",
+    "dataset_status": "ok",
+    "dataset_manifest_sha256": "e5f03de8da4a87cb94a56547aadb90e35eb12d808eddd1a77bd16706d7d28eb7",
+    "dataset_splits": {
+      "train": 1083,
+      "val": 361,
+      "detection": 80
+    },
+    "dataset_retrieved_at": "2026-10-12T18:12:54Z"
+  }
+}

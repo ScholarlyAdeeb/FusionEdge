@@ -1,0 +1,13 @@
+﻿04:54:04  fusionedge_main_s1235 pipeline (configs\fusionedge_s1235.yaml) 20261015_045404  root=D:\Projects\Sam
+04:54:04  python: C:\Python314\python.exe  Python 3.14.5
+04:54:08  cuda: True NVIDIA GeForce RTX 4070 Laptop GPU
+04:54:08  1/4 pytest -> D:\Projects\Sam\results\fusionedge_main_s1235\pytest_20261015_045404.txt
+04:55:18      pytest exit 0 : 378 passed, 2 warnings in 63.35s (0:01:03)
+04:55:18  2/4 pre-flight -> D:\Projects\Sam\results\fusionedge_main_s1235\preflight_20261015_045404.txt
+04:56:31      info: OLD in-autocast path vs fp64: loss rel err 1.58e-01, grad cos -0.00409  (v3-v5 trained on this)
+04:56:31      PREFLIGHT PASSED: 35/35 checks  -> results/preflight/preflight_v6_20261015_045521.json
+04:56:32  3/4 training fusionedge_main_s1235 (dashboard window opening)
+05:52:51      run_experiment exit 0 after 56.3 min
+05:52:51  4/4 audit + gate
+05:53:21      audit PASS, gate PASS
+05:53:21  fusionedge_main_s1235 complete and accepted by the automated gate. Visual review pending. Nothing else started.

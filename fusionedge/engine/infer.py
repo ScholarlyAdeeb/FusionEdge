@@ -76,9 +76,10 @@ def load_model(
 def is_trained(weights: str | Path) -> tuple[bool, str]:
     """Whether a checkpoint looks trained, and why.
 
-    An untrained FusionEdge returns the visible image almost exactly (its output
-    head is zero-initialised). Fusing with it therefore produces a plausible,
-    reasonable-looking picture that contains no infrared information at all. That
+    An untrained FusionEdge has a zero-initialised output head, so its output is a
+    fixed rule rather than anything learned: the visible image ('add' head), or
+    the visible image lifted half-way towards brighter IR ('inject' head). Either
+    way it is a plausible, reasonable-looking picture that no training shaped. That
     is the most dangerous failure mode in this project: a user runs inference on
     real pairs, sees a fine image, and concludes the model works.
 
@@ -115,9 +116,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ir", required=True)
     ap.add_argument("--vi", required=True)
-    ap.add_argument("--weights", required=True)
+    ap.add_argument("--run", default=None,
+                    help="experiment dir: use its config.yaml model and checkpoints/last.pt "
+                         "(the protocol's reported checkpoint); replaces --weights/--model/--model-cfg")
+    ap.add_argument("--weights", default=None)
     ap.add_argument("--model", default="fusionedge")
     ap.add_argument("--model-cfg", default="{}")
+    ap.add_argument("--fp32", action="store_true",
+                    help="no autocast (matches the holdout evaluation); default is bf16 autocast on CUDA")
     ap.add_argument("--out", required=True)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument(
@@ -126,13 +132,21 @@ def main() -> int:
         help="proceed even if the checkpoint looks untrained (for smoke tests only)",
     )
     args = ap.parse_args()
+    if args.run:
+        import yaml
+        run_cfg = yaml.safe_load((Path(args.run) / "config.yaml").read_text(encoding="utf-8"))
+        args.weights = str(Path(args.run) / "checkpoints" / "last.pt")
+        args.model = run_cfg["model"]["name"]
+        args.model_cfg = json.dumps(run_cfg["model"].get("cfg", {}))
+    if not args.weights:
+        ap.error("give --run <experiment dir> or --weights <checkpoint>")
 
     trained, reason = is_trained(args.weights)
     if not trained:
         print(f"REFUSING to fuse: {reason}", file=sys.stderr)
         print(
-            "\nAn untrained model returns the visible image, which looks like a "
-            "plausible fusion but contains no infrared information.\n"
+            "\nAn untrained model returns a fixed, unlearned blend, which looks like "
+            "a plausible fusion but reflects no training.\n"
             "Train first (python scripts/run_experiment.py --config configs/"
             "fusionedge.yaml), or pass --allow-untrained for a plumbing test.",
             file=sys.stderr,
@@ -143,7 +157,7 @@ def main() -> int:
     import cv2
 
     model = load_model(args.weights, args.model, json.loads(args.model_cfg), args.device)
-    fused = fuse_pair(model, args.ir, args.vi, device=args.device)
+    fused = fuse_pair(model, args.ir, args.vi, device=args.device, amp=not args.fp32)
 
     # How different is the output from the visible input? If the model is barely
     # using the infrared channel the answer is ~0 and that is worth knowing.

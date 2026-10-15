@@ -1,0 +1,12 @@
+﻿00:33:18  fusionedge pipeline 20261015_003318  root=D:\Projects\Sam
+00:33:18  python: C:\Python314\python.exe  Python 3.14.5
+00:33:22  cuda: True NVIDIA GeForce RTX 4070 Laptop GPU
+00:33:22  1/4 pytest -> D:\Projects\Sam\results\fusionedge\pytest_20261015_003318.txt
+00:33:57      pytest exit 0 : 368 passed, 2 warnings in 32.03s
+00:33:57  2/4 pre-flight -> D:\Projects\Sam\results\fusionedge\preflight_20261015_003318.txt
+00:34:43      [FAIL] - config is the v6 baseline                      run_name=fusionedge_main
+00:34:43      info: OLD in-autocast path vs fp64: loss rel err 1.14e-01, grad cos -0.00009  (v3-v5 trained on this)
+00:34:43      [FAIL] B train loss falls (epoch 3 < 0.8 x epoch 1)     0.983 -> 0.908 -> 0.922
+00:34:43      PREFLIGHT FAILED: 32/34 checks  -> results/preflight/preflight_v6_20261015_003359.json
+00:34:43  STOP: pre-flight failed
+00:34:43  nothing else was started. log: D:\Projects\Sam\results\fusionedge\fusionedge_20261015_003318.txt

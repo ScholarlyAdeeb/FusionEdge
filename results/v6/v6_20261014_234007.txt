@@ -1,0 +1,13 @@
+﻿23:40:07  baseline v6 pipeline 20261014_234007  root=D:\Projects\Sam
+23:40:07  python: C:\Python314\python.exe  Python 3.14.5
+23:40:10  cuda: True NVIDIA GeForce RTX 4070 Laptop GPU
+23:40:10  1/4 pytest -> D:\Projects\Sam\results\v6\pytest_20261014_234007.txt
+23:40:45      pytest exit 0 : 368 passed, 2 warnings in 31.37s
+23:40:45  2/4 pre-flight -> D:\Projects\Sam\results\v6\preflight_20261014_234007.txt
+23:41:24      info: OLD in-autocast path vs fp64: loss rel err 9.14e-03, grad cos 0.00004  (v3-v5 trained on this)
+23:41:24      PREFLIGHT PASSED: 34/34 checks  -> results/preflight/preflight_v6_20261014_234047.json
+23:41:24  3/4 training baseline_simplecnn_v6 (dashboard window opening)
+00:31:21      run_experiment exit 0 after 49.9 min
+00:31:21  4/4 audit + gate
+00:31:37      audit PASS, gate PASS
+00:31:37  baseline v6 complete and accepted by the automated gate. Visual review pending. Nothing else started.

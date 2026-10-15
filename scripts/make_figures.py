@@ -53,7 +53,7 @@ RUN_LABELS = {
 }
 
 
-def load_runs(exp_dir: Path, include_smoke: bool) -> list[dict]:
+def load_runs(exp_dir: Path, include_smoke: bool, protocol_only: bool = False) -> list[dict]:
     runs = []
     for d in sorted(exp_dir.iterdir()):
         mj = d / "metrics.json"
@@ -64,6 +64,14 @@ def load_runs(exp_dir: Path, include_smoke: bool) -> list[dict]:
         except json.JSONDecodeError:
             continue
         if payload.get("smoke") and not include_smoke:
+            continue
+        # Only runs that follow docs/PROTOCOL.md (holdout selection, test split
+        # evaluated once) and are not marked superseded may enter a table.
+        if (d / "SUPERSEDED").exists():
+            print(f"[make_figures] skip {d.name}: marked SUPERSEDED", file=sys.stderr)
+            continue
+        if protocol_only and (payload.get("protocol") or {}).get("selection_split") != "holdout of train":
+            print(f"[make_figures] skip {d.name}: pre-protocol run", file=sys.stderr)
             continue
         bj = d / "benchmark.json"
         payload["_bench"] = (
@@ -232,6 +240,8 @@ def main() -> int:
     ap.add_argument("--out", default=None, help="write markdown here (default: stdout)")
     ap.add_argument("--full", default="fusionedge_main", help="the run ablations compare to")
     ap.add_argument("--include-smoke", action="store_true")
+    ap.add_argument("--protocol-only", action="store_true",
+                    help="only runs following docs/PROTOCOL.md (holdout selection)")
     args = ap.parse_args()
 
     exp_dir = REPO_ROOT / args.exp
@@ -239,7 +249,7 @@ def main() -> int:
         print(f"no experiments directory at {exp_dir}", file=sys.stderr)
         return 2
 
-    runs = load_runs(exp_dir, args.include_smoke)
+    runs = load_runs(exp_dir, args.include_smoke, protocol_only=args.protocol_only)
     if not runs:
         print(
             f"no completed runs with metrics.json in {exp_dir}"

@@ -30,6 +30,13 @@ data:
   crop: 128               # training crop size; eval always uses full images
   limit_train: null
   limit_eval: null
+  # Evaluation protocol (2026-10-13). Per-epoch validation and best.pt selection
+  # use a fixed 10% holdout of MSRS train/ (deterministic sha1 ranking, ids
+  # written to <run>/holdout_manifest.json). The MSRS test/ split (`eval_split`)
+  # is evaluated ONCE, after training, and never influences any choice.
+  # Earlier runs (v1-v3) validated and selected on test/ -- not comparable.
+  holdout_frac: 0.1
+  holdout_seed: 0
 
 train:
   epochs: 60
@@ -39,10 +46,32 @@ train:
   scheduler: cosine
   eta_min: 1.0e-6
   grad_clip: 1.0
+
+  # Mixed precision.
+  #
+  #   amp_dtype: bfloat16 | float16 | float32   (default bfloat16)
+  #   amp: true | false                          (amp:false forces fp32)
+  #
+  # bfloat16, not float16. An earlier run used fp16 and silently failed: the
+  # GradScaler scale collapsed from 32768 to 0 within 50 steps because gradients
+  # overflowed, so nearly every optimizer step was skipped while the loss curve
+  # still looked plausible. Measured from the identical checkpoint over 250
+  # steps: fp16 improved the loss 1.4%, fp32 improved it 39.9%.
+  # bfloat16 has fp32's exponent range, so it does not overflow here, and it
+  # needs no loss scaling. Evidence: experiments/_failed/.
+  #
+  # Set amp: false for an fp32 baseline. Training now aborts if it sees a streak
+  # of non-finite values, rather than reporting a result from a diverged run.
   amp: true
-  eval_every: 2
+  amp_dtype: bfloat16
+  max_nonfinite_streak: 25
+
+  eval_every: 5
   eval_max_images: null   # set to an int to cap evaluation cost on long runs
-  best_metric: MS_SSIM_ir # the ONE metric `best.pt` is selected on
+  best_metric: MS_SSIM_ir # the ONE metric `best.pt` is selected on (holdout)
+  # Which checkpoint is reported on test/: `last` = same fixed budget for every
+  # model, no selection at all. best.pt is still saved for inspection.
+  final_weights: last
 
   # Progress bar: auto | always | never
   #   auto   - show only when stderr is an interactive terminal (default).

@@ -1,0 +1,13 @@
+﻿FusionEdge launch 20261013_005456
+root=D:\Projects\Sam config=configs\baseline.yaml run=baseline_simplecnn_v4 stop=True skipTests=False noTrain=False
+python: C:\Python314\python.exe  Python 3.14.5
+RUNNING pid=2724 started=10/13/2026 00:32:43 cmd=C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.EXE -NoLogo -NoProfile -NonInteractive -Command "cd D:\Projects\Sam; python scripts/run_experiment.py --config configs/baseline.yaml 2>&1 | Tee-Object -FilePath experiments\_baseline_v3.log | Select-Object -Last 3"
+RUNNING pid=5260 started=10/13/2026 00:32:44 cmd="C:\Python314\python.exe" scripts/run_experiment.py --config configs/baseline.yaml
+stopping pid 2724: SUCCESS: The process with PID 22452 (child process of PID 5260) has been terminated. | SUCCESS: The process with PID 18132 (child process of PID 5260) has been terminated. | SUCCESS: The process with PID 27896 (child process of PID 5260) has been terminated. | SUCCESS: The process with PID 6320 (child process of PID 5260) has been terminated. | SUCCESS: The process with PID 11740 (child process of PID 5260) has been terminated. | SUCCESS: The process with PID 20488 (child process of PID 5260) has been terminated. | SUCCESS: The process with PID 3576 (child process of PID 2724) has been terminated. | SUCCESS: The process with PID 5260 (child process of PID 2724) has been terminated. | SUCCESS: The process with PID 2724 (child process of PID 21372) has been terminated.
+stopping pid 5260: ERROR: The process with PID 5260 (child process of PID 2724) could not be terminated. | Reason: There is no running instance of the task. | System.Management.Automation.RemoteException
+== pytest (output: D:\Projects\Sam\results\recovery\pytest_20261013_005456.txt) ==
+pytest exit code: 1
+  =========================== short test summary info ===========================
+  FAILED tests/test_recovery_fixes.py::test_ms_ssim_is_the_standard_product_of_scales
+  1 failed, 360 passed, 2 warnings in 28.53s
+ABORT: tests failed, not training.

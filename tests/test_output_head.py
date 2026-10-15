@@ -214,7 +214,7 @@ def test_baseline_reduces_loss_on_synthetic_data_too():
 def test_fusionedge_starts_from_the_visible_image():
     """FusionEdge's residual head means an untrained model is exactly the visible
     input -- which is why it never hit the saturation problem."""
-    m = FusionEdge(width=16, depth=1).eval()
+    m = FusionEdge(width=16, depth=1, residual_mode="add").eval()
     vi = torch.rand(1, 3, 32, 32)
     with torch.no_grad():
         out = m(torch.rand(1, 1, 32, 32), vi)

@@ -1,0 +1,50 @@
+{
+  "model": "fusionedge",
+  "params": 22339,
+  "params_all": 22339,
+  "checkpoint_mb": 0.352,
+  "latency": [
+    {
+      "size": [
+        128,
+        128
+      ],
+      "batch_size": 1,
+      "iters": 200,
+      "warmup_iters": 50,
+      "warmup_s": 5.517,
+      "latency_ms_median": 17.0793,
+      "latency_ms_mean": 20.2722,
+      "latency_ms_p95": 48.0942,
+      "latency_ms_min": 5.7825,
+      "fps": 58.55,
+      "amp": false,
+      "device": "cuda",
+      "peak_vram_mb": 87.33,
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU"
+    },
+    {
+      "size": [
+        480,
+        640
+      ],
+      "batch_size": 1,
+      "iters": 200,
+      "warmup_iters": 50,
+      "warmup_s": 4.081,
+      "latency_ms_median": 46.8941,
+      "latency_ms_mean": 46.8979,
+      "latency_ms_p95": 47.06,
+      "latency_ms_min": 46.3135,
+      "fps": 21.32,
+      "amp": false,
+      "device": "cuda",
+      "peak_vram_mb": 453.51,
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU"
+    }
+  ],
+  "torch": "2.12.1+cu126",
+  "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "run_name": "fusionedge_main_s1236",
+  "dataset_id": "MSRS"
+}

@@ -1,5 +1,9 @@
 # Status: dataset acquired; remaining gates before any reported number
 
+> **Note (2026-10-15):** this page records the project's state up to 2026-10-13 and is kept for history.
+> - The gates in §3–§5 have since been passed; the "six ablations" in §4 Step 5 have not been run.
+> - Current state: [RESULTS.md](RESULTS.md) for the results, [EXPERIMENTS.md](EXPERIMENTS.md) for every run, [PROTOCOL.md](PROTOCOL.md) for the rules.
+
 **MSRS is acquired and validated. Real-data training is no longer blocked on
 acquisition.** The gates below now concern *results*, not *data*.
 

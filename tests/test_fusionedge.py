@@ -39,8 +39,9 @@ def test_non_divisible_sizes(size):
 def test_starts_as_identity_on_the_visible_image():
     """The head is zero-initialised, so an untrained FusionEdge returns the visible
     image exactly. This makes the early loss curve readable and means training
-    starts from a sane point rather than from noise."""
-    m = small()
+    starts from a sane point rather than from noise. ('add' head only: this
+    fixed point is also why 'add' never trains -- see PROTOCOL.md.)"""
+    m = small(residual_mode="add")
     ir, vi = torch.rand(1, 1, 32, 32), torch.rand(1, 3, 32, 32)
     assert torch.allclose(m(ir, vi), vi, atol=1e-6)
 
@@ -49,7 +50,7 @@ def test_ignores_ir_when_weights_are_untrained():
     """Consequence of the identity initialisation: the output cannot yet depend
     on the infrared input. Asserted because it explains why the very first
     training steps are needed before any IR information can appear."""
-    m = small()
+    m = small(residual_mode="add")
     vi = torch.rand(1, 3, 32, 32)
     ir1, ir2 = torch.rand(1, 1, 32, 32), torch.rand(1, 1, 32, 32)
     assert torch.allclose(m(ir1, vi), m(ir2, vi), atol=1e-6)

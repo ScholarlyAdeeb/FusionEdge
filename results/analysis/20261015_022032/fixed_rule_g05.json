@@ -1,0 +1,13 @@
+{
+ "what": "untrained FusionEdge inject (fixed rule Y=Y_vi+0.5*relu(IR-Y_vi)), holdout 108, same metrics",
+ "metrics": {
+  "EN": 6.649060535924287,
+  "AG": 0.022025884076132995,
+  "SF": 0.06103182046808038,
+  "MI": 5.987627396632227,
+  "SSIM_ir": 0.4689921969892802,
+  "SSIM_vi": 0.9490662813186646,
+  "MS_SSIM_ir": 0.44549890018912586,
+  "MS_SSIM_vi": 0.9688103823292784
+ }
+}

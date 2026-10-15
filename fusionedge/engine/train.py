@@ -28,12 +28,52 @@ import torch.nn as nn
 
 from ..data import build_dataloaders
 from ..losses import FusionLoss
+from ..losses.fusion_loss import fp32_loss
 from ..utils.checkpoint import load_checkpoint, save_checkpoint
 from ..utils.logger import RunLogger
 from ..utils.progress import ProgressBar, Timer
 from ..utils.registry import build_model
 from ..utils.seed import seed_everything
 from .evaluate import evaluate_model
+
+
+#: Mixed-precision dtypes this project supports, and whether each needs a
+#: GradScaler.
+#:
+#: float16 has a narrow exponent range (max ~65504). Activations leaving the
+#: network head measured |x| up to ~27 with values well past that, so gradients
+#: overflowed and the GradScaler responded by *skipping* those steps. That is the
+#: dangerous failure mode: the scaler scale collapses toward zero, most or all
+#: optimizer steps are silently discarded, the loss curve looks like noise, and
+#: nothing raises. Measured on this run: scale 32768 -> 0 within 50 steps and
+#: loss improving 1.4% over 250 steps, versus 39.9% in fp32 from the identical
+#: checkpoint.
+#:
+#: bfloat16 has the same 8-bit exponent as fp32, so it does not overflow at
+#: these magnitudes, and needs no loss scaling.
+AMP_DTYPES: dict[str, bool] = {
+    "bfloat16": False,
+    "float16": True,
+    "float32": False,
+}
+
+
+def resolve_amp(tcfg: dict, device: torch.device) -> tuple[bool, str]:
+    """Return (use_autocast, dtype_name) from the config and the device.
+
+    Defaults to bfloat16 on CUDA. Falls back to no-autocast on CPU, since CPU
+    autocast with bf16 is not reliably faster and can lose precision.
+    """
+    name = str(tcfg.get("amp_dtype", "bfloat16")).lower()
+    if name not in AMP_DTYPES:
+        raise KeyError(f"unknown amp_dtype '{name}'; valid: {sorted(AMP_DTYPES)}")
+    if not bool(tcfg.get("amp", True)):
+        return False, "float32"
+    if device.type != "cuda":
+        return False, "float32"
+    if name == "float32":
+        return False, "float32"
+    return True, name
 
 
 def build_optimizer(model: nn.Module, cfg: dict) -> torch.optim.Optimizer:
@@ -128,7 +168,17 @@ class Trainer:
             eval_split=dcfg.get("eval_split", "val"),
             limit_train=data_cfg.get("limit_train"),
             limit_eval=data_cfg.get("limit_eval"),
+            holdout_frac=float(data_cfg.get("holdout_frac", 0.0) or 0.0),
+            holdout_seed=int(data_cfg.get("holdout_seed", 0)),
+            loader_seed=int(data_cfg.get("loader_seed", 0)),
         )
+        holdout = self.registry.get("holdout")
+        if holdout is not None:
+            # the exact ids used for model selection, so the split is auditable
+            self.run_dir.mkdir(parents=True, exist_ok=True)
+            (self.run_dir / "holdout_manifest.json").write_text(
+                json.dumps(holdout, indent=2), encoding="utf-8"
+            )
 
         self.model = build_model(cfg["model"]["name"], cfg["model"].get("cfg", {})).to(self.device)
         if self.device.type == "cuda":
@@ -142,8 +192,21 @@ class Trainer:
         self.tcfg = tcfg
         self.optimizer = build_optimizer(self.model, tcfg)
         self.scheduler = build_scheduler(self.optimizer, tcfg, int(tcfg.get("epochs", 100)))
-        self.amp = bool(tcfg.get("amp", True)) and self.device.type == "cuda"
-        self.scaler = torch.amp.GradScaler("cuda", enabled=self.amp)
+
+        self.amp, self.amp_dtype_name = resolve_amp(tcfg, self.device)
+        self.amp_dtype = {
+            "bfloat16": torch.bfloat16,
+            "float16": torch.float16,
+            "float32": torch.float32,
+        }[self.amp_dtype_name]
+
+        self.scaler = torch.amp.GradScaler(
+            "cuda", enabled=self.amp and self.amp_dtype_name == "float16"
+        )
+        #: consecutive steps with non-finite loss / gradients. See the guard in
+        #: train_epoch: silent divergence must abort the run, not be averaged in.
+        self.nonfinite_streak = 0
+        self.max_nonfinite_streak = int(tcfg.get("max_nonfinite_streak", 25))
         self.grad_clip = float(tcfg.get("grad_clip", 0.0) or 0.0)
         self.eval_every = int(tcfg.get("eval_every", 1))
         self.total_epochs = int(tcfg.get("epochs", 100))
@@ -166,12 +229,23 @@ class Trainer:
                 "parameters": f"{n_params:,}",
                 "device": str(self.device),
                 "amp": self.amp,
+                "amp_dtype": self.amp_dtype_name if self.amp else "float32",
+                "grad_scaler": self.scaler.is_enabled(),
                 "channels_last": self.device.type == "cuda",
                 "dataset_id": self.registry.get("dataset_id"),
                 "dataset_manifest": str(self.registry.get("manifest_sha256"))[:16],
                 "dataset_splits": json.dumps(self.registry.get("splits", {})),
                 "train_batches": len(self.train_loader),
                 "val_images": len(self.val_loader.dataset),
+                "val_source": (
+                    f"holdout of {self.registry['holdout']['source_split']} "
+                    f"(n={self.registry['holdout']['used']['n_holdout']}"
+                    f"/{self.registry['holdout']['n_holdout']}, "
+                    f"sha {self.registry['holdout']['holdout_sha256'][:12]}); "
+                    f"test split untouched during training"
+                    if self.registry.get("holdout") else
+                    self.cfg.get("dataset", {}).get("eval_split", "val")
+                ),
                 "batch_size": self.tcfg.get("batch_size"),
                 "crop": self.cfg.get("data", {}).get("crop"),
                 "epochs": self.tcfg.get("epochs"),
@@ -191,6 +265,34 @@ class Trainer:
             )
 
     # ------------------------------------------------------------------ #
+    def _grads_are_finite(self) -> tuple[bool, str]:
+        """Check every gradient for non-finite values. Returns (ok, first_bad)."""
+        for name, p in self.model.named_parameters():
+            if p.grad is not None and not torch.isfinite(p.grad).all():
+                return False, name
+        return True, ""
+
+    def _register_nonfinite(self, *, step: int, epoch: int, stage: str) -> None:
+        """Track a divergence and abort once it is clearly not transient.
+
+        A single non-finite step can be a genuinely transient fp16 overflow that
+        the scaler will handle. A *streak* of them means training has diverged,
+        and the honest action is to stop rather than report a result from a run
+        that is not learning.
+        """
+        self.nonfinite_streak += 1
+        if self.nonfinite_streak == 1 or self.nonfinite_streak % 25 == 0:
+            self.log.warn(
+                f"non-finite {stage} at epoch {epoch + 1} step {step + 1} "
+                f"(streak {self.nonfinite_streak}/{self.max_nonfinite_streak})"
+            )
+        if self.nonfinite_streak >= self.max_nonfinite_streak:
+            raise RuntimeError(
+                f"training diverged: {self.nonfinite_streak} consecutive "
+                f"non-finite {stage} values (limit {self.max_nonfinite_streak}). "
+                f"Aborting rather than reporting a result from a diverged run."
+            )
+
     def _to_device(self, batch: dict) -> tuple[torch.Tensor, torch.Tensor]:
         ir = batch["ir"].to(self.device, non_blocking=True)
         vi = batch["vi"].to(self.device, non_blocking=True)
@@ -216,34 +318,74 @@ class Trainer:
         for i, batch in enumerate(self.train_loader):
             ir, vi = self._to_device(batch)
             self.optimizer.zero_grad(set_to_none=True)
-            # Step the LR schedule per optimizer step, not per epoch. Stepping it
-            # per epoch also triggers PyTorch's "scheduler.step() before
-            # optimizer.step()" warning on the first batch, and conflates the
-            # schedule with the epoch count.
-            if self.scheduler is not None:
-                self.scheduler.step()
 
             if self.amp:
-                with torch.autocast("cuda", dtype=torch.float16):
+                with torch.autocast("cuda", dtype=self.amp_dtype):
                     fused = self.model(ir, vi)
-                    # losses are computed in fp32: the intensity/gradient terms
-                    # compare near-identical tensors, and fp16 subtraction there
-                    # loses the small differences the loss is trying to measure.
-                    loss, parts = self.loss_fn(fused.float(), ir.float(), vi.float())
-                self.scaler.scale(loss).backward()
-                if self.grad_clip > 0:
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
+                # The loss runs OUTSIDE autocast, in genuine fp32 (fp32_loss also
+                # disables autocast explicitly). Until 2026-10-14 it ran inside
+                # the autocast block, where `.float()` on the inputs did not stop
+                # its conv2d ops being re-cast to bf16; the SSIM/Sobel gradients
+                # were corrupted and the baseline never learned (v3-v5).
+                loss, parts = fp32_loss(self.loss_fn, fused, ir, vi)
+                if not torch.isfinite(loss):
+                    self._register_nonfinite(step=i, epoch=epoch, stage="loss")
+                    continue
+                if self.scaler.is_enabled():
+                    self.scaler.scale(loss).backward()
+                    if self.grad_clip > 0:
+                        self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(), self.grad_clip
+                        )
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                    # A scaler that has driven its scale to ~1e-8 has hit a
+                    # genuine overflow, not a transient one. Continuing would
+                    # mean training on almost no gradients while the loss curve
+                    # still looks plausible, so this aborts the run instead.
+                    if self.scaler.get_scale() < 1e-8:
+                        raise RuntimeError(
+                            f"GradScaler scale collapsed to "
+                            f"{self.scaler.get_scale():.2e} at epoch {epoch + 1}, "
+                            f"step {i + 1}: fp16 gradients are overflowing "
+                            f"persistently and optimizer steps are being "
+                            f"skipped. Switch amp_dtype to bfloat16 or set "
+                            f"amp: false. Aborting rather than reporting a "
+                            f"result from a run that is not training."
+                        )
+                else:
+                    loss.backward()
+                    finite, _ = self._grads_are_finite()
+                    if not finite:
+                        self._register_nonfinite(step=i, epoch=epoch, stage="grad")
+                        self.optimizer.zero_grad(set_to_none=True)
+                        continue
+                    if self.grad_clip > 0:
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(), self.grad_clip
+                        )
+                    self.optimizer.step()
             else:
                 fused = self.model(ir, vi)
                 loss, parts = self.loss_fn(fused, ir, vi)
+                if not torch.isfinite(loss):
+                    self._register_nonfinite(step=i, epoch=epoch, stage="loss")
+                    continue
                 loss.backward()
+                if not self._grads_are_finite()[0]:
+                    self._register_nonfinite(step=i, epoch=epoch, stage="grad")
+                    self.optimizer.zero_grad(set_to_none=True)
+                    continue
                 if self.grad_clip > 0:
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
                 self.optimizer.step()
 
+            # LR schedule advances once per *taken* optimizer step, after it.
+            # (It was previously stepped before optimizer.step(), which skipped
+            # the first LR value and triggered PyTorch's ordering warning.)
+            if self.scheduler is not None:
+                self.scheduler.step()
             self.state.global_step += 1
             bs = ir.shape[0]
             n += bs
@@ -330,6 +472,8 @@ class Trainer:
                             self.model,
                             optimizer=self.optimizer,
                             scaler=self.scaler,
+                            scheduler=self.scheduler,
+                            best_epoch=epoch,
                             epoch=epoch,
                             global_step=self.state.global_step,
                             best_metric=self.state.best_metric,
@@ -346,6 +490,8 @@ class Trainer:
                     self.model,
                     optimizer=self.optimizer,
                     scaler=self.scaler,
+                    scheduler=self.scheduler,
+                    best_epoch=self.state.best_epoch,
                     epoch=self.state.epoch,
                     global_step=self.state.global_step,
                     best_metric=self.state.best_metric,
@@ -360,6 +506,8 @@ class Trainer:
                 self.model,
                 optimizer=self.optimizer,
                 scaler=self.scaler,
+                scheduler=self.scheduler,
+                best_epoch=self.state.best_epoch,
                 epoch=self.state.epoch,
                 global_step=self.state.global_step,
                 best_metric=self.state.best_metric,
@@ -381,12 +529,15 @@ class Trainer:
             self.model,
             optimizer=self.optimizer,
             scaler=self.scaler,
+            scheduler=self.scheduler,
             map_location=self.device,
+            restore_rng=True,
         )
+        bm = payload.get("best_metric")
         self.state = TrainState(
             epoch=int(payload.get("epoch", 0)),
             global_step=int(payload.get("global_step", 0)),
-            best_metric=float(payload.get("best_metric", -1e18)),
-            best_epoch=-1,
+            best_metric=float(bm) if bm is not None else -1e18,
+            best_epoch=int(payload.get("best_epoch", -1)),
         )
         return self.state

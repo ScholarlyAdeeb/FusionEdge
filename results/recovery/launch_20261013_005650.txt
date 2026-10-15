@@ -1,0 +1,10 @@
+﻿FusionEdge launch 20261013_005650
+root=D:\Projects\Sam config=configs\baseline.yaml run=baseline_simplecnn_v4 stop=True skipTests=False noTrain=False
+python: C:\Python314\python.exe  Python 3.14.5
+no run_experiment.py process running
+== pytest (output: D:\Projects\Sam\results\recovery\pytest_20261013_005650.txt) ==
+pytest exit code: 1
+  =========================== short test summary info ===========================
+  FAILED tests/test_recovery_fixes.py::test_ms_ssim_is_the_standard_product_of_scales
+  1 failed, 360 passed, 2 warnings in 26.59s
+ABORT: tests failed, not training.

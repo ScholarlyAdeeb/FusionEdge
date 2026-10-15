@@ -1,0 +1,26 @@
+  [PASS] all train losses finite            60 epochs logged
+  [PASS] completed configured epochs        60/60
+  [PASS] last.pt strict reload              experiments\baseline_simplecnn_v6\checkpoints\last.pt
+  [PASS] checkpoint epoch == configured     epoch=60 global_step=7260
+  [PASS] checkpoint has scheduler state     
+  [PASS] forward pass deterministic         2 images, fp32, run twice
+  [PASS] loss below fresh init >=1% (fixed) 5.1447 -> 1.2148 (+76.39%, noise 0.0e+00, 16 holdout imgs)
+  [PASS] saturation < 5%                    0.0010
+  [PASS] corr(fused, ir) > 0 (mean)         0.210
+  [PASS] corr(fused, vi) > 0 (mean)         0.969
+  [PASS] contrast >= 50% of weaker source   3.145
+  [PASS] not a copy of visible              mean|dY|=0.0249
+  [PASS] carries IR beyond visible          corr(f,ir)=0.210 vs corr(vi,ir)=0.056 (need +0.05)
+  [PASS] chroma faithful to visible         mean|dCbCr|=0.0000
+
+  holdout metrics (run vs identity_vi):
+    EN             7.3230     7.3209
+    AG             0.0337     0.0328
+    SF             0.0877     0.0863
+    MI             4.3753     7.8296
+    SSIM_ir        0.3419     0.2883
+    SSIM_vi        0.9494     1.0000
+    MS_SSIM_ir     0.3555     0.2283
+    MS_SSIM_vi     0.9450     1.0000
+
+  RESULT: PASS  -> results/checks/baseline_simplecnn_v6.json

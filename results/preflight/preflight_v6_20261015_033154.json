@@ -1,0 +1,262 @@
+{
+  "stamp": "20261015_033154",
+  "passed": true,
+  "device": "cuda",
+  "torch": "2.12.1+cu126",
+  "checks": [
+    {
+      "section": "-",
+      "check": "config fuses luminance only (protocol)",
+      "pass": true,
+      "detail": "run_name=fusionedge_main_s1235 model=fusionedge"
+    },
+    {
+      "section": "-",
+      "check": "run directory does not exist yet",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "section": "A",
+      "check": "autocast active for the forward pass",
+      "pass": true,
+      "detail": "device=cuda bf16=True"
+    },
+    {
+      "section": "A",
+      "check": "fp32_loss under autocast == plain fp32",
+      "pass": true,
+      "detail": "max |diff| 5.82e-11, run-to-run kernel noise 1.16e-10"
+    },
+    {
+      "section": "A",
+      "check": "loss and gradient finite",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "section": "A",
+      "check": "loss matches fp64 reference",
+      "pass": true,
+      "detail": "max rel err 1.73e-06"
+    },
+    {
+      "section": "A",
+      "check": "smooth-term gradient matches fp64",
+      "pass": true,
+      "detail": "intensity+ssim, off L1 ties: min cos 1.0000000 (ties up to 76% of pixels)"
+    },
+    {
+      "section": "A",
+      "check": "parameter gradient matches fp64",
+      "pass": true,
+      "detail": "full loss, dL/dtheta min cos 1.0000000"
+    },
+    {
+      "section": "A",
+      "check": "full gradient within fp64 noise floor",
+      "pass": true,
+      "detail": "min cos(fp32,fp64) 0.89130 vs floor 0.69363"
+    },
+    {
+      "section": "A",
+      "check": "gradient bounded",
+      "pass": true,
+      "detail": "max |dL/df| 0.00113"
+    },
+    {
+      "section": "B",
+      "check": "every trainable parameter updated",
+      "pass": true,
+      "detail": "61/61 tensors"
+    },
+    {
+      "section": "B",
+      "check": "optimizer stepped every batch",
+      "pass": true,
+      "detail": "global_step=64, expected 64"
+    },
+    {
+      "section": "D",
+      "check": "resume restores epoch",
+      "pass": true,
+      "detail": "epoch=2"
+    },
+    {
+      "section": "D",
+      "check": "resume restores global step",
+      "pass": true,
+      "detail": "64"
+    },
+    {
+      "section": "D",
+      "check": "resume restores LR schedule",
+      "pass": true,
+      "detail": "lr 2.575e-05 vs 2.575e-05, sched step 64"
+    },
+    {
+      "section": "D",
+      "check": "resume restores optimizer state",
+      "pass": true,
+      "detail": "adam step counts [64]"
+    },
+    {
+      "section": "D",
+      "check": "resumed run completes the schedule",
+      "pass": true,
+      "detail": "epoch 3, step 96, final lr 1.00e-06"
+    },
+    {
+      "section": "D",
+      "check": "history accumulates across resume",
+      "pass": true,
+      "detail": "3 rows"
+    },
+    {
+      "section": "B",
+      "check": "train loss finite",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "section": "B",
+      "check": "loss below fresh init >=1% (fixed imgs)",
+      "pass": true,
+      "detail": "1.0357 -> 0.9721 (+6.14%, noise 0.0e+00, 8 imgs)"
+    },
+    {
+      "section": "B",
+      "check": "holdout validation logged every epoch",
+      "pass": true,
+      "detail": "8 val metrics x 3 epochs"
+    },
+    {
+      "section": "B",
+      "check": "holdout output not saturated (<5%)",
+      "pass": true,
+      "detail": "0.0291"
+    },
+    {
+      "section": "B",
+      "check": "holdout output follows visible (corr > 0.5)",
+      "pass": true,
+      "detail": "+0.967"
+    },
+    {
+      "section": "B",
+      "check": "holdout output carries IR (corr > corr(vi,ir))",
+      "pass": true,
+      "detail": "+0.154 vs +0.014"
+    },
+    {
+      "section": "C",
+      "check": "last.pt and best.pt written",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "section": "C",
+      "check": "last.pt metadata complete",
+      "pass": true,
+      "detail": "epoch 3, step 96"
+    },
+    {
+      "section": "C",
+      "check": "best.pt records its holdout metric",
+      "pass": true,
+      "detail": "0.3057339117123923 @ epoch 2"
+    },
+    {
+      "section": "C",
+      "check": "strict reload: weights bitwise identical",
+      "pass": true,
+      "detail": "88 tensors incl. BN stats"
+    },
+    {
+      "section": "C",
+      "check": "strict reload reproduces outputs (same layout)",
+      "pass": true,
+      "detail": "3 holdout images, fp32, eval mode"
+    },
+    {
+      "section": "C",
+      "check": "cross-layout output gap negligible",
+      "pass": true,
+      "detail": "max |diff| 2.38e-07 (contiguous vs channels_last)"
+    },
+    {
+      "section": "E",
+      "check": "validation reads the TRAIN split, not test",
+      "pass": true,
+      "detail": "val split dir = 'train', test split dir = 'val'"
+    },
+    {
+      "section": "E",
+      "check": "validation ids are the declared holdout",
+      "pass": true,
+      "detail": "8 ids, holdout sha fbf10e110601"
+    },
+    {
+      "section": "E",
+      "check": "train / holdout / test pairwise disjoint",
+      "pass": true,
+      "detail": "fit 975, holdout 108, test 361"
+    },
+    {
+      "section": "E",
+      "check": "holdout matches the protocol (10%, seed 0)",
+      "pass": true,
+      "detail": "n=108/975 sha fbf10e110601 (smoke used {'n_fit': 256, 'n_holdout': 8, 'limited': True})"
+    },
+    {
+      "section": "E",
+      "check": "reported checkpoint fixed by config (last)",
+      "pass": true,
+      "detail": "final_weights=last; best.pt selected on holdout MS_SSIM_ir"
+    }
+  ],
+  "info": {
+    "loss_precision": {
+      "loss_rel": 1.7338972820899129e-06,
+      "grad_cos": 0.891302670479051,
+      "floor_cos": 0.6936330926894532,
+      "smooth_cos": 0.9999999987212712,
+      "old_loss_rel": 0.1289652138069968,
+      "old_grad_cos": -0.006576743698290879,
+      "grad_max": 0.0011348412372171879,
+      "tie_frac": 0.7614288330078125,
+      "param_cos": 0.9999999952983137,
+      "rr_noise": 1.1641532182693481e-10,
+      "fixed_vs_plain": 5.820766091346741e-11
+    },
+    "smoke_seconds_2_epochs": 33.2,
+    "smoke_train_loss": [
+      0.8480996135622263,
+      0.8369223643094301,
+      0.8662674482911825
+    ],
+    "smoke_train_loss_per_epoch": "0.848 -> 0.837 -> 0.866",
+    "smoke_learning_check": {
+      "init": 1.0356956645846367,
+      "trained": 0.9720522090792656,
+      "rel_drop": 0.0614499584015302,
+      "noise": 0.0,
+      "min_rel": 0.01,
+      "n": 8,
+      "pass": true
+    },
+    "smoke_val_MS_SSIM_ir": [
+      0.28003051966710735,
+      0.30409697245708084,
+      0.3057339117123923
+    ],
+    "smoke_holdout": {
+      "saturation": 0.02905761808506213,
+      "corr_vi": 0.9670194133231438,
+      "corr_ir": 0.1539521541639255,
+      "corr_vi_ir": 0.01383491766960187
+    },
+    "reload_cross_layout_max_abs_diff": 2.384185791015625e-07
+  },
+  "smoke_dir": "D:\\Projects\\Sam\\experiments\\_preflight\\20261015_033154"
+}

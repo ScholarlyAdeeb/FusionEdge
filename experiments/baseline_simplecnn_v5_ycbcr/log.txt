@@ -1,0 +1,179 @@
+21:04:02 | INFO    | ------------------------------------------------------------------------
+21:04:02 | INFO    | run setup
+21:04:02 | INFO    | ------------------------------------------------------------------------
+21:04:02 | INFO    | configuration:
+21:04:02 | INFO    |   run_dir                            experiments\baseline_simplecnn_v5_ycbcr
+21:04:02 | INFO    |   model                              baseline
+21:04:02 | INFO    |   parameters                         13,089
+21:04:02 | INFO    |   device                             cuda
+21:04:02 | INFO    |   amp                                True
+21:04:02 | INFO    |   amp_dtype                          bfloat16
+21:04:02 | INFO    |   grad_scaler                        False
+21:04:02 | INFO    |   channels_last                      True
+21:04:02 | INFO    |   dataset_id                         MSRS
+21:04:02 | INFO    |   dataset_manifest                   e5f03de8da4a87cb
+21:04:02 | INFO    |   dataset_splits                     {"train": 1083, "val": 361, "detection": 80}
+21:04:02 | INFO    |   train_batches                      121
+21:04:02 | INFO    |   val_images                         108
+21:04:02 | INFO    |   val_source                         holdout of train (n=108, sha fbf10e110601); test split untouched during training
+21:04:02 | INFO    |   batch_size                         None
+21:04:02 | INFO    |   crop                               128
+21:04:02 | INFO    |   epochs                             60
+21:04:02 | INFO    |   optimizer                          adam
+21:04:02 | INFO    |   lr                                 0.0001
+21:04:02 | INFO    |   loss                               w_intensity=8.0, w_gradient=10.0, w_ssim=2.0, w_edge=1.0, w_color=1.0, use_edge=True
+21:04:02 | INFO    |   best_metric                        MS_SSIM_ir
+21:04:02 | INFO    |   deterministic                      True
+21:04:02 | INFO    |   gpu: NVIDIA GeForce RTX 4070 Laptop GPU | 8.0 GiB VRAM | torch 2.12.1+cu126
+21:04:02 | INFO    | ------------------------------------------------------------------------
+21:04:02 | INFO    | training for 60 epochs
+21:04:02 | INFO    | ------------------------------------------------------------------------
+21:04:16 | INFO    |   epoch 1 | step 50/121 | loss 7.0144 | lr 1.00e-04
+21:04:19 | INFO    |   epoch 1 | step 100/121 | loss 7.3900 | lr 1.00e-04
+21:04:24 | INFO    |   epoch 2 | step 50/121 | loss 7.5873 | lr 9.99e-05
+21:04:27 | INFO    |   epoch 2 | step 100/121 | loss 7.1933 | lr 9.98e-05
+21:04:31 | INFO    |   epoch 3 | step 50/121 | loss 6.7630 | lr 9.96e-05
+21:04:34 | INFO    |   epoch 3 | step 100/121 | loss 6.9342 | lr 9.95e-05
+21:04:39 | INFO    |   epoch 4 | step 50/121 | loss 7.7466 | lr 9.92e-05
+21:04:42 | INFO    |   epoch 4 | step 100/121 | loss 7.0641 | lr 9.90e-05
+21:04:45 | INFO    |   epoch 5 | step 50/121 | loss 6.6937 | lr 9.87e-05
+21:04:46 | INFO    |   epoch 5 | step 100/121 | loss 6.1221 | lr 9.84e-05
+21:04:47 | INFO    |   [val] epoch 5/60 ...
+21:06:25 | INFO    |   [val] epoch 5: AG=0.0127 | EN=4.7686 | MI=1.4295 | MS_SSIM_ir=0.2554 | MS_SSIM_vi=0.0046 | SF=0.0454 | SSIM_ir=0.2275 | SSIM_vi=0.1105
+21:06:25 | INFO    |   new best MS_SSIM_ir=0.2554 -> best.pt
+21:06:27 | INFO    |   epoch 6 | step 50/121 | loss 6.7419 | lr 9.80e-05
+21:06:29 | INFO    |   epoch 6 | step 100/121 | loss 6.6406 | lr 9.77e-05
+21:06:31 | INFO    |   epoch 7 | step 50/121 | loss 6.9342 | lr 9.72e-05
+21:06:33 | INFO    |   epoch 7 | step 100/121 | loss 6.3062 | lr 9.69e-05
+21:06:36 | INFO    |   epoch 8 | step 50/121 | loss 6.6227 | lr 9.63e-05
+21:06:38 | INFO    |   epoch 8 | step 100/121 | loss 6.6386 | lr 9.59e-05
+21:06:40 | INFO    |   epoch 9 | step 50/121 | loss 7.2099 | lr 9.53e-05
+21:06:42 | INFO    |   epoch 9 | step 100/121 | loss 8.2742 | lr 9.48e-05
+21:06:45 | INFO    |   epoch 10 | step 50/121 | loss 6.6679 | lr 9.41e-05
+21:06:46 | INFO    |   epoch 10 | step 100/121 | loss 8.0279 | lr 9.36e-05
+21:06:47 | INFO    |   [val] epoch 10/60 ...
+21:08:24 | INFO    |   [val] epoch 10: AG=0.0105 | EN=4.1829 | MI=1.2442 | MS_SSIM_ir=0.2731 | MS_SSIM_vi=0.0050 | SF=0.0418 | SSIM_ir=0.2382 | SSIM_vi=0.1194
+21:08:24 | INFO    |   new best MS_SSIM_ir=0.2731 -> best.pt
+21:08:26 | INFO    |   epoch 11 | step 50/121 | loss 6.6265 | lr 9.28e-05
+21:08:28 | INFO    |   epoch 11 | step 100/121 | loss 7.5544 | lr 9.23e-05
+21:08:33 | INFO    |   epoch 12 | step 50/121 | loss 6.6214 | lr 9.14e-05
+21:08:36 | INFO    |   epoch 12 | step 100/121 | loss 7.2559 | lr 9.08e-05
+21:08:40 | INFO    |   epoch 13 | step 50/121 | loss 7.1581 | lr 8.99e-05
+21:08:43 | INFO    |   epoch 13 | step 100/121 | loss 7.0926 | lr 8.93e-05
+21:08:48 | INFO    |   epoch 14 | step 50/121 | loss 7.5732 | lr 8.83e-05
+21:08:51 | INFO    |   epoch 14 | step 100/121 | loss 7.1313 | lr 8.76e-05
+21:08:55 | INFO    |   epoch 15 | step 50/121 | loss 6.5705 | lr 8.66e-05
+21:08:59 | INFO    |   epoch 15 | step 100/121 | loss 6.9571 | lr 8.58e-05
+21:09:00 | INFO    |   [val] epoch 15/60 ...
+21:11:30 | INFO    |   [val] epoch 15: AG=0.0108 | EN=4.3442 | MI=1.4502 | MS_SSIM_ir=0.2710 | MS_SSIM_vi=0.0076 | SF=0.0454 | SSIM_ir=0.2303 | SSIM_vi=0.1160
+21:11:33 | INFO    |   epoch 16 | step 50/121 | loss 7.6249 | lr 8.47e-05
+21:11:36 | INFO    |   epoch 16 | step 100/121 | loss 6.6143 | lr 8.40e-05
+21:11:40 | INFO    |   epoch 17 | step 50/121 | loss 7.2410 | lr 8.28e-05
+21:11:43 | INFO    |   epoch 17 | step 100/121 | loss 6.4354 | lr 8.20e-05
+21:11:47 | INFO    |   epoch 18 | step 50/121 | loss 7.7742 | lr 8.08e-05
+21:11:50 | INFO    |   epoch 18 | step 100/121 | loss 7.1328 | lr 8.00e-05
+21:11:55 | INFO    |   epoch 19 | step 50/121 | loss 6.9823 | lr 7.87e-05
+21:11:57 | INFO    |   epoch 19 | step 100/121 | loss 7.8710 | lr 7.78e-05
+21:12:02 | INFO    |   epoch 20 | step 50/121 | loss 7.9000 | lr 7.66e-05
+21:12:05 | INFO    |   epoch 20 | step 100/121 | loss 7.7023 | lr 7.56e-05
+21:12:06 | INFO    |   [val] epoch 20/60 ...
+21:14:36 | INFO    |   [val] epoch 20: AG=0.0115 | EN=4.5896 | MI=1.4859 | MS_SSIM_ir=0.2668 | MS_SSIM_vi=0.0060 | SF=0.0473 | SSIM_ir=0.2256 | SSIM_vi=0.0987
+21:14:39 | INFO    |   epoch 21 | step 50/121 | loss 7.1244 | lr 7.43e-05
+21:14:42 | INFO    |   epoch 21 | step 100/121 | loss 7.5359 | lr 7.34e-05
+21:14:46 | INFO    |   epoch 22 | step 50/121 | loss 7.4297 | lr 7.20e-05
+21:14:49 | INFO    |   epoch 22 | step 100/121 | loss 6.4333 | lr 7.10e-05
+21:14:53 | INFO    |   epoch 23 | step 50/121 | loss 6.8756 | lr 6.97e-05
+21:14:56 | INFO    |   epoch 23 | step 100/121 | loss 6.8709 | lr 6.87e-05
+21:15:01 | INFO    |   epoch 24 | step 50/121 | loss 6.9516 | lr 6.72e-05
+21:15:03 | INFO    |   epoch 24 | step 100/121 | loss 6.8753 | lr 6.62e-05
+21:15:08 | INFO    |   epoch 25 | step 50/121 | loss 6.7795 | lr 6.48e-05
+21:15:10 | INFO    |   epoch 25 | step 100/121 | loss 7.2538 | lr 6.37e-05
+21:15:12 | INFO    |   [val] epoch 25/60 ...
+21:17:39 | INFO    |   [val] epoch 25: AG=0.0106 | EN=4.4457 | MI=1.4684 | MS_SSIM_ir=0.2773 | MS_SSIM_vi=0.0079 | SF=0.0429 | SSIM_ir=0.2349 | SSIM_vi=0.1082
+21:17:39 | INFO    |   new best MS_SSIM_ir=0.2773 -> best.pt
+21:17:43 | INFO    |   epoch 26 | step 50/121 | loss 7.5149 | lr 6.23e-05
+21:17:46 | INFO    |   epoch 26 | step 100/121 | loss 6.9941 | lr 6.12e-05
+21:17:50 | INFO    |   epoch 27 | step 50/121 | loss 7.3336 | lr 5.97e-05
+21:17:53 | INFO    |   epoch 27 | step 100/121 | loss 6.6013 | lr 5.87e-05
+21:17:57 | INFO    |   epoch 28 | step 50/121 | loss 6.9839 | lr 5.72e-05
+21:18:00 | INFO    |   epoch 28 | step 100/121 | loss 7.2917 | lr 5.61e-05
+21:18:05 | INFO    |   epoch 29 | step 50/121 | loss 6.1896 | lr 5.46e-05
+21:18:07 | INFO    |   epoch 29 | step 100/121 | loss 7.0439 | lr 5.35e-05
+21:18:12 | INFO    |   epoch 30 | step 50/121 | loss 7.0273 | lr 5.20e-05
+21:18:15 | INFO    |   epoch 30 | step 100/121 | loss 6.9861 | lr 5.09e-05
+21:18:16 | INFO    |   [val] epoch 30/60 ...
+21:20:51 | INFO    |   [val] epoch 30: AG=0.0100 | EN=4.3143 | MI=1.3561 | MS_SSIM_ir=0.2856 | MS_SSIM_vi=0.0134 | SF=0.0394 | SSIM_ir=0.2437 | SSIM_vi=0.1152
+21:20:51 | INFO    |   new best MS_SSIM_ir=0.2856 -> best.pt
+21:20:55 | INFO    |   epoch 31 | step 50/121 | loss 6.4704 | lr 4.94e-05
+21:20:58 | INFO    |   epoch 31 | step 100/121 | loss 7.0723 | lr 4.84e-05
+21:21:04 | INFO    |   epoch 32 | step 50/121 | loss 6.3944 | lr 4.68e-05
+21:21:08 | INFO    |   epoch 32 | step 100/121 | loss 7.6726 | lr 4.58e-05
+21:21:13 | INFO    |   epoch 33 | step 50/121 | loss 6.6018 | lr 4.43e-05
+21:21:17 | INFO    |   epoch 33 | step 100/121 | loss 7.7806 | lr 4.32e-05
+21:21:23 | INFO    |   epoch 34 | step 50/121 | loss 7.2313 | lr 4.17e-05
+21:21:27 | INFO    |   epoch 34 | step 100/121 | loss 7.5054 | lr 4.06e-05
+21:21:32 | INFO    |   epoch 35 | step 50/121 | loss 7.3364 | lr 3.92e-05
+21:21:35 | INFO    |   epoch 35 | step 100/121 | loss 6.6396 | lr 3.81e-05
+21:21:37 | INFO    |   [val] epoch 35/60 ...
+21:24:15 | INFO    |   [val] epoch 35: AG=0.0105 | EN=4.5916 | MI=1.4884 | MS_SSIM_ir=0.2700 | MS_SSIM_vi=0.0102 | SF=0.0400 | SSIM_ir=0.2377 | SSIM_vi=0.1132
+21:24:20 | INFO    |   epoch 36 | step 50/121 | loss 6.5078 | lr 3.67e-05
+21:24:23 | INFO    |   epoch 36 | step 100/121 | loss 6.3403 | lr 3.56e-05
+21:24:29 | INFO    |   epoch 37 | step 50/121 | loss 6.8360 | lr 3.42e-05
+21:24:33 | INFO    |   epoch 37 | step 100/121 | loss 6.8032 | lr 3.32e-05
+21:24:38 | INFO    |   epoch 38 | step 50/121 | loss 7.2131 | lr 3.18e-05
+21:24:42 | INFO    |   epoch 38 | step 100/121 | loss 7.1649 | lr 3.08e-05
+21:24:47 | INFO    |   epoch 39 | step 50/121 | loss 6.6820 | lr 2.94e-05
+21:24:51 | INFO    |   epoch 39 | step 100/121 | loss 7.1166 | lr 2.84e-05
+21:24:56 | INFO    |   epoch 40 | step 50/121 | loss 7.1715 | lr 2.71e-05
+21:24:59 | INFO    |   epoch 40 | step 100/121 | loss 7.7247 | lr 2.61e-05
+21:25:01 | INFO    |   [val] epoch 40/60 ...
+21:27:37 | INFO    |   [val] epoch 40: AG=0.0103 | EN=4.6350 | MI=1.4835 | MS_SSIM_ir=0.2643 | MS_SSIM_vi=0.0105 | SF=0.0386 | SSIM_ir=0.2376 | SSIM_vi=0.1170
+21:27:41 | INFO    |   epoch 41 | step 50/121 | loss 6.5421 | lr 2.48e-05
+21:27:45 | INFO    |   epoch 41 | step 100/121 | loss 6.9984 | lr 2.39e-05
+21:27:51 | INFO    |   epoch 42 | step 50/121 | loss 6.9474 | lr 2.26e-05
+21:27:54 | INFO    |   epoch 42 | step 100/121 | loss 7.5505 | lr 2.18e-05
+21:28:00 | INFO    |   epoch 43 | step 50/121 | loss 7.1893 | lr 2.05e-05
+21:28:04 | INFO    |   epoch 43 | step 100/121 | loss 6.7682 | lr 1.97e-05
+21:28:09 | INFO    |   epoch 44 | step 50/121 | loss 6.4205 | lr 1.85e-05
+21:28:13 | INFO    |   epoch 44 | step 100/121 | loss 6.4915 | lr 1.77e-05
+21:28:19 | INFO    |   epoch 45 | step 50/121 | loss 7.1864 | lr 1.66e-05
+21:28:22 | INFO    |   epoch 45 | step 100/121 | loss 7.4643 | lr 1.58e-05
+21:28:24 | INFO    |   [val] epoch 45/60 ...
+21:31:00 | INFO    |   [val] epoch 45: AG=0.0107 | EN=4.6739 | MI=1.5098 | MS_SSIM_ir=0.2645 | MS_SSIM_vi=0.0072 | SF=0.0409 | SSIM_ir=0.2387 | SSIM_vi=0.1074
+21:31:04 | INFO    |   epoch 46 | step 50/121 | loss 7.2874 | lr 1.47e-05
+21:31:08 | INFO    |   epoch 46 | step 100/121 | loss 7.4055 | lr 1.40e-05
+21:31:13 | INFO    |   epoch 47 | step 50/121 | loss 6.8710 | lr 1.30e-05
+21:31:17 | INFO    |   epoch 47 | step 100/121 | loss 7.0605 | lr 1.23e-05
+21:31:23 | INFO    |   epoch 48 | step 50/121 | loss 6.3861 | lr 1.14e-05
+21:31:27 | INFO    |   epoch 48 | step 100/121 | loss 7.5597 | lr 1.07e-05
+21:31:32 | INFO    |   epoch 49 | step 50/121 | loss 6.1778 | lr 9.83e-06
+21:31:36 | INFO    |   epoch 49 | step 100/121 | loss 6.7082 | lr 9.23e-06
+21:31:41 | INFO    |   epoch 50 | step 50/121 | loss 7.0487 | lr 8.41e-06
+21:31:45 | INFO    |   epoch 50 | step 100/121 | loss 6.9769 | lr 7.86e-06
+21:31:46 | INFO    |   [val] epoch 50/60 ...
+21:34:17 | INFO    |   [val] epoch 50: AG=0.0105 | EN=4.6998 | MI=1.5261 | MS_SSIM_ir=0.2683 | MS_SSIM_vi=0.0101 | SF=0.0399 | SSIM_ir=0.2373 | SSIM_vi=0.1132
+21:34:21 | INFO    |   epoch 51 | step 50/121 | loss 6.1725 | lr 7.11e-06
+21:34:24 | INFO    |   epoch 51 | step 100/121 | loss 6.6154 | lr 6.60e-06
+21:34:28 | INFO    |   epoch 52 | step 50/121 | loss 6.8668 | lr 5.92e-06
+21:34:31 | INFO    |   epoch 52 | step 100/121 | loss 6.6560 | lr 5.46e-06
+21:34:35 | INFO    |   epoch 53 | step 50/121 | loss 6.5785 | lr 4.85e-06
+21:34:38 | INFO    |   epoch 53 | step 100/121 | loss 7.2921 | lr 4.45e-06
+21:34:42 | INFO    |   epoch 54 | step 50/121 | loss 7.5674 | lr 3.91e-06
+21:34:45 | INFO    |   epoch 54 | step 100/121 | loss 6.1829 | lr 3.56e-06
+21:34:49 | INFO    |   epoch 55 | step 50/121 | loss 7.5981 | lr 3.10e-06
+21:34:52 | INFO    |   epoch 55 | step 100/121 | loss 6.8105 | lr 2.81e-06
+21:34:54 | INFO    |   [val] epoch 55/60 ...
+21:37:23 | INFO    |   [val] epoch 55: AG=0.0106 | EN=4.6509 | MI=1.5141 | MS_SSIM_ir=0.2601 | MS_SSIM_vi=0.0141 | SF=0.0399 | SSIM_ir=0.2348 | SSIM_vi=0.1177
+21:37:27 | INFO    |   epoch 56 | step 50/121 | loss 6.3166 | lr 2.42e-06
+21:37:30 | INFO    |   epoch 56 | step 100/121 | loss 6.7162 | lr 2.18e-06
+21:37:34 | INFO    |   epoch 57 | step 50/121 | loss 6.8817 | lr 1.87e-06
+21:37:37 | INFO    |   epoch 57 | step 100/121 | loss 6.2004 | lr 1.68e-06
+21:37:41 | INFO    |   epoch 58 | step 50/121 | loss 6.7407 | lr 1.45e-06
+21:37:44 | INFO    |   epoch 58 | step 100/121 | loss 6.2987 | lr 1.32e-06
+21:37:48 | INFO    |   epoch 59 | step 50/121 | loss 6.3334 | lr 1.17e-06
+21:37:51 | INFO    |   epoch 59 | step 100/121 | loss 6.4321 | lr 1.09e-06
+21:37:56 | INFO    |   epoch 60 | step 50/121 | loss 6.2984 | lr 1.02e-06
+21:37:58 | INFO    |   epoch 60 | step 100/121 | loss 7.0428 | lr 1.00e-06
+21:38:00 | INFO    |   [val] epoch 60/60 ...
+21:40:28 | INFO    |   [val] epoch 60: AG=0.0109 | EN=4.7308 | MI=1.5290 | MS_SSIM_ir=0.2605 | MS_SSIM_vi=0.0104 | SF=0.0407 | SSIM_ir=0.2393 | SSIM_vi=0.1131
+21:40:28 | INFO    | done. best MS_SSIM_ir=0.2856 at epoch 30

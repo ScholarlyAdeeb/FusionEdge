@@ -1,0 +1,11 @@
+﻿23:29:11  baseline v6 pipeline 20261014_232911  root=D:\Projects\Sam
+23:29:11  python: C:\Python314\python.exe  Python 3.14.5
+23:29:14  cuda: True NVIDIA GeForce RTX 4070 Laptop GPU
+23:29:14  1/4 pytest -> D:\Projects\Sam\results\v6\pytest_20261014_232911.txt
+23:29:45      pytest exit 0 : 367 passed, 2 warnings in 28.13s
+23:29:45  2/4 pre-flight -> D:\Projects\Sam\results\v6\preflight_20261014_232911.txt
+23:30:21      info: OLD in-autocast path vs fp64: loss rel err 8.92e-03, grad cos 0.29063  (v3-v5 trained on this)
+23:30:21      [FAIL] C cross-layout output gap negligible             max |diff| 2.09e-03 (contiguous vs channels_last)
+23:30:21      PREFLIGHT FAILED: 33/34 checks  -> results/preflight/preflight_v6_20261014_232946.json
+23:30:21  STOP: pre-flight failed
+23:30:21  nothing else was started. log: D:\Projects\Sam\results\v6\v6_20261014_232911.txt

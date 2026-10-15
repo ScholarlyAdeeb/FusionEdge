@@ -1,0 +1,13 @@
+﻿01:25:05  fusionedge pipeline 20261015_012505  root=D:\Projects\Sam
+01:25:05  python: C:\Python314\python.exe  Python 3.14.5
+01:25:09  cuda: True NVIDIA GeForce RTX 4070 Laptop GPU
+01:25:09  1/4 pytest -> D:\Projects\Sam\results\fusionedge\pytest_20261015_012505.txt
+01:25:47      pytest exit 0 : 374 passed, 2 warnings in 34.43s
+01:25:47  2/4 pre-flight -> D:\Projects\Sam\results\fusionedge\preflight_20261015_012505.txt
+01:26:42      info: OLD in-autocast path vs fp64: loss rel err 3.03e-01, grad cos -0.00397  (v3-v5 trained on this)
+01:26:42      PREFLIGHT PASSED: 35/35 checks  -> results/preflight/preflight_v6_20261015_012550.json
+01:26:42  3/4 training fusionedge_main (dashboard window opening)
+02:17:43      run_experiment exit 0 after 51.0 min
+02:17:43  4/4 audit + gate
+02:18:02      audit PASS, gate PASS
+02:18:02  FusionEdge complete and accepted by the automated gate. Visual review pending. Nothing else started.

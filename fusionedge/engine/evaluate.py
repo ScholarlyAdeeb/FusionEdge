@@ -52,21 +52,31 @@ def fuse_batch(
     *,
     device: torch.device,
     amp: bool = True,
+    amp_dtype: str = "bfloat16",
     pad_multiple: int = 8,
 ) -> torch.Tensor:
     """Pad -> forward -> unpad, so odd input sizes are handled by the model
-    rather than crashing it. Returns the fused tensor at the *original* size."""
+    rather than crashing it. Returns the fused tensor at the *original* size.
+
+    `amp_dtype` defaults to bfloat16 for the same reason training does: fp16
+    overflows here too (see Trainer.AMP_DTYPES). Evaluation in fp32 is ~2x
+    slower and remains available via amp=False.
+    """
     h, w = ir.shape[-2:]
     ir_p = pad_to_multiple(ir, pad_multiple)
     vi_p = pad_to_multiple(vi, pad_multiple)
 
     ir_d, vi_d = ir_p.to(device, non_blocking=True), vi_p.to(device, non_blocking=True)
     if amp and device.type == "cuda":
-        with torch.autocast("cuda", dtype=torch.float16):
+        dtype = {
+            "bfloat16": torch.bfloat16,
+            "float16": torch.float16,
+        }.get(amp_dtype, torch.bfloat16)
+        with torch.autocast("cuda", dtype=dtype):
             out = model(ir_d, vi_d)
     else:
         out = model(ir_d, vi_d)
-    return out[..., :h, :w]
+    return out[..., :h, :w].float()
 
 
 def evaluate_model(
@@ -75,6 +85,7 @@ def evaluate_model(
     *,
     device: torch.device | str = "cuda",
     amp: bool = True,
+    amp_dtype: str = "bfloat16",
     per_image: Callable[[np.ndarray, np.ndarray, np.ndarray], dict[str, float]] | None = None,
     max_images: int | None = None,
     progress: Callable[[int, int], None] | None = None,
@@ -98,7 +109,9 @@ def evaluate_model(
 
     for batch in loader:
         ir, vi = batch["ir"], batch["vi"]
-        fused = fuse_batch(model, ir, vi, device=device, amp=amp)
+        fused = fuse_batch(
+            model, ir, vi, device=device, amp=amp, amp_dtype=amp_dtype
+        )
         for i in range(fused.shape[0]):
             if max_images is not None and count >= max_images:
                 break
@@ -137,6 +150,7 @@ def run_evaluation(
     *,
     device: str = "cuda",
     amp: bool = True,
+    amp_dtype: str = "bfloat16",
     out_json: str | Path | None = None,
     max_images: int | None = None,
     yolo: dict | None = None,
@@ -151,7 +165,8 @@ def run_evaluation(
         load_model_weights(model, model_path, device=str(device_t))
 
     result = evaluate_model(
-        model, loader, device=device_t, amp=amp, max_images=max_images
+        model, loader, device=device_t, amp=amp, amp_dtype=amp_dtype,
+        max_images=max_images,
     )
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -172,6 +187,7 @@ def run_evaluation(
             "num_images": result["num_images"],
             "elapsed_s": result["elapsed_s"],
             "amp": amp,
+            "amp_dtype": amp_dtype if amp else "float32",
             "device": str(device_t),
             "torch": torch.__version__,
         },

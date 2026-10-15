@@ -2,7 +2,7 @@
 fusion.
 
 This is the project's contribution, so every design choice below is written as a
-claim that the ablation table in docs/EXPERIMENTS.md is expected to test. If an
+claim that the ablations (configs/ablation_*.yaml; not yet run, see docs/EXPERIMENTS.md) test. If an
 ablation does not support a component, the component should be removed rather
 than defended -- the flags in `__init__` exist to make that removal a config
 change, not a rewrite.
@@ -24,8 +24,8 @@ Tensor-shape walkthrough (B=batch, C=width, H,W=spatial, T=64 pooled tokens)
          A = softmax([l_ir, l_vi], dim=modality)   -> (B,H,W), sums to 1
          f = A_ir * F_ir + A_vi * F_vi             -> (B,C,H,W)
 
-    residual detail head: 2 x residual separable block -> head -> ΔL (B,1,H,W)
-    out = clamp(vi_rgb + ΔL, 0, 1)                 -> (B,3,H,W)
+    residual detail head: 2 x residual separable block -> head -> g = σ(·) (B,1,H,W)
+    Y = Y_vi + g * relu(IR - Y_vi);  out = recolour(Y, vi)   -> (B,3,H,W)
 
 Why the output is a *residual on the visible image* rather than a fresh RGB
 prediction: colour is not recoverable from infrared, so asking the network to
@@ -51,6 +51,7 @@ from .blocks import (
     SobelEdgeExtractor,
     ResidualSeparableBlock,
 )
+from .colour import inject_ir, recolour
 
 
 class CrossModalExchange(nn.Module):
@@ -79,11 +80,13 @@ class CrossModalExchange(nn.Module):
 
     def _tokens(self, x: torch.Tensor) -> torch.Tensor:
         """(B,C,H,W) -> (B*heads, T, head_dim) with T = grid*grid."""
-        b = x.shape[0]
+        b, c = x.shape[:2]
         t = F.adaptive_avg_pool2d(x, self.grid).flatten(2)  # (B,C,T)
-        t = t.transpose(1, 2)  # (B,T,C)
-        t = t.reshape(b * self.heads, self.grid * self.grid, self.head_dim)
-        return t
+        # split CHANNELS into heads: (B,heads,hd,T) -> (B,heads,T,hd).
+        # (The previous reshape of a (B,T,C) tensor straight to
+        # (B*heads,T,hd) mixed token and channel axes.)
+        t = t.reshape(b, self.heads, self.head_dim, self.grid * self.grid)
+        return t.transpose(2, 3).reshape(b * self.heads, self.grid * self.grid, self.head_dim)
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """x attends to y and vice versa. Returns (x', y') with y' shaped like x."""
@@ -92,12 +95,15 @@ class CrossModalExchange(nn.Module):
         qy, ky, vy = self._tokens(self.q(y)), self._tokens(self.k(y)), self._tokens(self.v(y))
 
         scale = self.head_dim**-0.5
-        ax = torch.softmax(qx @ ky.transpose(-2, -1) * scale, dim=-1) @ vx
+        # x queries y, so it must aggregate y's VALUES (was `@ vx`, which meant
+        # the IR branch never received visible-image content).
+        ax = torch.softmax(qx @ ky.transpose(-2, -1) * scale, dim=-1) @ vy
         ay = torch.softmax(qy @ kx.transpose(-2, -1) * scale, dim=-1) @ vx
 
         def to_map(t: torch.Tensor, like: torch.Tensor) -> torch.Tensor:
+            # exact inverse of _tokens: (B*heads,T,hd) -> (B,heads,hd,T) -> (B,C,g,g)
             m = t.reshape(like.shape[0], self.heads, self.grid * self.grid, self.head_dim)
-            m = m.permute(0, 2, 1, 3).reshape(like.shape[0], c, self.grid, self.grid)
+            m = m.transpose(2, 3).reshape(like.shape[0], c, self.grid, self.grid)
             return F.interpolate(m, size=like.shape[-2:], mode="bilinear", align_corners=False)
 
         return self.proj(to_map(ax, x)) + x, self.proj(to_map(ay, y)) + y
@@ -120,6 +126,12 @@ class FusionEdge(nn.Module):
             isolates *separability* from *width*.
         residual_output: predict a luminance residual on the visible image
             (default True). When False the network regresses RGB directly.
+        residual_mode: how the residual is formed when residual_output is True.
+            'inject' (default): the head predicts a per-pixel gate
+            g = sigmoid(delta) and Y = Y_vi + g * relu(IR - Y_vi), recoloured with
+            the visible chroma. 'add': out = clamp(vi + delta), the original head;
+            it starts at a non-smooth fixed point of the loss and never leaves it
+            (see docs/PROTOCOL.md), so it is kept only for reproducibility.
         shared_stem: share the stem weights across modalities (default True).
     """
 
@@ -137,6 +149,9 @@ class FusionEdge(nn.Module):
         residual_output: bool = True,
         shared_stem: bool = True,
         token_grid: int = 8,
+        rgb_activation: str = "clamp",
+        output_space: str = "rgb",
+        residual_mode: str = "inject",
     ):
         super().__init__()
         self.cfg = dict(
@@ -151,7 +166,19 @@ class FusionEdge(nn.Module):
             residual_output=residual_output,
             shared_stem=shared_stem,
             token_grid=token_grid,
+            rgb_activation=rgb_activation,
+            output_space=output_space,
+            residual_mode=residual_mode,
         )
+        if residual_mode not in ("add", "inject"):
+            raise ValueError(f"residual_mode must be add|inject, got {residual_mode!r}")
+        self.residual_mode = residual_mode
+        if output_space not in ("rgb", "y"):
+            raise ValueError(f"output_space must be rgb|y, got {output_space!r}")
+        self.output_space = output_space
+        if rgb_activation not in ("clamp", "sigmoid"):
+            raise ValueError(f"rgb_activation must be clamp|sigmoid, got {rgb_activation!r}")
+        self.rgb_activation = rgb_activation
 
         # ---- shared modality-agnostic stem -------------------------------
         # IR is replicated to 3 channels so ONE stem handles both modalities.
@@ -189,7 +216,8 @@ class FusionEdge(nn.Module):
         # ---- reconstruction head -----------------------------------------
         self.residual_output = residual_output
         self.detail = nn.Sequential(*[ResidualSeparableBlock(width, width) for _ in range(2)])
-        out_ch = 1 if residual_output else 3
+        # residual: 1-channel luminance delta. direct: RGB, or Y when output_space='y'
+        out_ch = 1 if (residual_output or output_space == "y") else 3
         self.head = nn.Conv2d(width, out_ch, 3, padding=1)
         nn.init.zeros_(self.head.weight)
         nn.init.zeros_(self.head.bias)
@@ -240,7 +268,24 @@ class FusionEdge(nn.Module):
         delta = self.head(x)
 
         if self.residual_output:
+            if self.residual_mode == "inject":
+                # IR can only ADD luminance where it is brighter than the visible
+                # image; the gate is smooth in the parameters, so unlike 'add' it
+                # has no kink at its starting point (g = 0.5 with the zero head)
+                return inject_ir(delta, ir, vi)
             return torch.clamp(vi + delta, 0.0, 1.0)
+        # Direct-RGB ablation. `rgb_activation: sigmoid` is what the ablation
+        # config uses: with a zero-initialised head, clamp(delta) starts every
+        # pixel on the 0 boundary -- the dead-gradient failure that froze the
+        # original baseline -- so a clamp-head ablation would be rigged against
+        # itself. 'clamp' remains the default for backward compatibility.
+        if self.output_space == "y":
+            # direct luminance + visible chroma: same output space as the
+            # baseline and the residual head, so the ablation isolates the
+            # residual parameterisation only
+            return recolour(torch.sigmoid(delta), vi)
+        if self.rgb_activation == "sigmoid":
+            return torch.sigmoid(delta)
         return torch.clamp(delta, 0.0, 1.0)
 
     # ------------------------------------------------------------------ #
@@ -296,7 +341,7 @@ def build_fusionedge(cfg: dict[str, Any] | None = None) -> FusionEdge:
     known = {
         "width", "depth", "dilations", "use_cross_modal", "adaptive_fusion",
         "use_edge_guidance", "use_se", "separable", "residual_output",
-        "shared_stem", "token_grid",
+        "shared_stem", "token_grid", "rgb_activation", "output_space", "residual_mode",
     }
     unknown = set(cfg) - known
     if unknown:

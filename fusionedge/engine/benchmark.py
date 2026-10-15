@@ -61,6 +61,10 @@ def benchmark_latency(
     use_cuda = dev.type == "cuda"
     if use_cuda:
         torch.backends.cudnn.benchmark = True
+        # training's deterministic mode turns TF32 off; latency is measured on the
+        # fast path, as it always was (TF32 was on by default before that change)
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cuda.matmul.allow_tf32 = True
 
     def run() -> None:
         if amp and use_cuda:

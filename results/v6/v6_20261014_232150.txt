@@ -1,0 +1,17 @@
+﻿23:21:50  baseline v6 pipeline 20261014_232150  root=D:\Projects\Sam
+23:21:50  python: C:\Python314\python.exe  Python 3.14.5
+23:21:53  cuda: True NVIDIA GeForce RTX 4070 Laptop GPU
+23:21:53  1/4 pytest -> D:\Projects\Sam\results\v6\pytest_20261014_232150.txt
+23:22:24      pytest exit 0 : 367 passed, 2 warnings in 27.48s
+23:22:24  2/4 pre-flight -> D:\Projects\Sam\results\v6\preflight_20261014_232150.txt
+23:23:02      preflight v6 20261014_232225  device=cuda  torch 2.12.1+cu126  gpu NVIDIA GeForce RTX 4070 Laptop GPU
+23:23:02      [FAIL] A fp32_loss under autocast == plain fp32 (exact) loss and gradient, 8 batches
+23:23:02      info: OLD in-autocast path vs fp64: loss rel err 5.41e-03, grad cos 0.01402  (v3-v5 trained on this)
+23:23:02      B-E. smoke run in D:\Projects\Sam\experiments\_preflight\20261014_232225
+23:23:02      23:22:29 | INFO    |   run_dir                            D:\Projects\Sam\experiments\_preflight\20261014_232225
+23:23:02      23:22:49 | INFO    |   run_dir                            D:\Projects\Sam\experiments\_preflight\20261014_232225
+23:23:02      [FAIL] C strict reload reproduces outputs exactly       3 holdout images, fp32, eval mode
+23:23:02      [FAIL] E holdout matches the protocol (10%, seed 0)     n=8/256 sha b10a11cb54ab
+23:23:02      PREFLIGHT FAILED: 29/32 checks  -> results/preflight/preflight_v6_20261014_232225.json
+23:23:02  STOP: pre-flight failed
+23:23:02  nothing else was started. log: D:\Projects\Sam\results\v6\v6_20261014_232150.txt

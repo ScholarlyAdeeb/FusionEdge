@@ -1,0 +1,53 @@
+00:32:47 | INFO    | ------------------------------------------------------------------------
+00:32:47 | INFO    | run setup
+00:32:47 | INFO    | ------------------------------------------------------------------------
+00:32:47 | INFO    | configuration:
+00:32:47 | INFO    |   run_dir                            experiments\baseline_simplecnn_v3_bf16
+00:32:47 | INFO    |   model                              baseline
+00:32:47 | INFO    |   parameters                         13,667
+00:32:47 | INFO    |   device                             cuda
+00:32:47 | INFO    |   amp                                True
+00:32:47 | INFO    |   amp_dtype                          bfloat16
+00:32:47 | INFO    |   grad_scaler                        False
+00:32:47 | INFO    |   channels_last                      True
+00:32:47 | INFO    |   dataset_id                         MSRS
+00:32:47 | INFO    |   dataset_manifest                   e5f03de8da4a87cb
+00:32:47 | INFO    |   dataset_splits                     {"train": 1083, "val": 361, "detection": 80}
+00:32:47 | INFO    |   train_batches                      135
+00:32:47 | INFO    |   val_images                         361
+00:32:47 | INFO    |   batch_size                         None
+00:32:47 | INFO    |   crop                               128
+00:32:47 | INFO    |   epochs                             60
+00:32:47 | INFO    |   optimizer                          adam
+00:32:47 | INFO    |   lr                                 0.0001
+00:32:47 | INFO    |   loss                               w_intensity=8.0, w_gradient=10.0, w_ssim=2.0, w_edge=1.0, w_color=1.0, use_edge=True
+00:32:47 | INFO    |   best_metric                        MS_SSIM_ir
+00:32:47 | INFO    |   deterministic                      True
+00:32:47 | INFO    |   gpu: NVIDIA GeForce RTX 4070 Laptop GPU | 8.0 GiB VRAM | torch 2.12.1+cu126
+00:32:47 | INFO    | ------------------------------------------------------------------------
+00:32:47 | INFO    | training for 60 epochs
+00:32:47 | INFO    | ------------------------------------------------------------------------
+00:32:59 | INFO    |   epoch 1 | step 50/135 | loss 7.6159 | lr 1.00e-04
+00:33:02 | INFO    |   epoch 1 | step 100/135 | loss 5.9967 | lr 1.00e-04
+00:33:08 | INFO    |   epoch 2 | step 50/135 | loss 6.0875 | lr 9.99e-05
+00:33:11 | INFO    |   epoch 2 | step 100/135 | loss 6.1246 | lr 9.98e-05
+00:33:14 | INFO    |   [val] epoch 2/60 ...
+00:39:00 | INFO    |   [val] epoch 2: AG=0.0085 | EN=4.1899 | MI=1.3622 | MS_SSIM_ir=0.5450 | MS_SSIM_vi=0.5953 | SF=0.0234 | SSIM_ir=0.2299 | SSIM_vi=0.3680
+00:39:00 | INFO    |   new best MS_SSIM_ir=0.5450 -> best.pt
+00:39:04 | INFO    |   epoch 3 | step 50/135 | loss 5.9204 | lr 9.96e-05
+00:39:07 | INFO    |   epoch 3 | step 100/135 | loss 6.2470 | lr 9.95e-05
+00:39:13 | INFO    |   epoch 4 | step 50/135 | loss 6.0993 | lr 9.92e-05
+00:39:16 | INFO    |   epoch 4 | step 100/135 | loss 6.8699 | lr 9.91e-05
+00:39:19 | INFO    |   [val] epoch 4/60 ...
+00:45:06 | INFO    |   [val] epoch 4: AG=0.0084 | EN=4.7640 | MI=1.7382 | MS_SSIM_ir=0.4841 | MS_SSIM_vi=0.5833 | SF=0.0232 | SSIM_ir=0.1980 | SSIM_vi=0.3557
+00:45:10 | INFO    |   epoch 5 | step 50/135 | loss 5.9134 | lr 9.87e-05
+00:45:14 | INFO    |   epoch 5 | step 100/135 | loss 6.4142 | lr 9.85e-05
+00:45:19 | INFO    |   epoch 6 | step 50/135 | loss 6.1223 | lr 9.81e-05
+00:45:22 | INFO    |   epoch 6 | step 100/135 | loss 6.6339 | lr 9.78e-05
+00:45:25 | INFO    |   [val] epoch 6/60 ...
+00:50:55 | INFO    |   [val] epoch 6: AG=0.0093 | EN=4.9689 | MI=1.8826 | MS_SSIM_ir=0.4610 | MS_SSIM_vi=0.6014 | SF=0.0274 | SSIM_ir=0.1891 | SSIM_vi=0.3752
+00:50:59 | INFO    |   epoch 7 | step 50/135 | loss 6.1523 | lr 9.73e-05
+00:51:02 | INFO    |   epoch 7 | step 100/135 | loss 5.6868 | lr 9.69e-05
+00:51:08 | INFO    |   epoch 8 | step 50/135 | loss 6.3724 | lr 9.64e-05
+00:51:10 | INFO    |   epoch 8 | step 100/135 | loss 5.3076 | lr 9.60e-05
+00:51:12 | INFO    |   [val] epoch 8/60 ...

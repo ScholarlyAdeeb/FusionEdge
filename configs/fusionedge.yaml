@@ -16,5 +16,6 @@ model:
     use_se: true
     separable: true
     residual_output: true
+    residual_mode: inject  # gate * relu(IR - Y_vi); 'add' never left identity (PROTOCOL.md)
     shared_stem: true
     token_grid: 8

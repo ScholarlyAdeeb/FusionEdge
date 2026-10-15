@@ -194,6 +194,27 @@ _MS_SSIM_WEIGHTS = np.array([0.0448, 0.2856, 0.3001, 0.2363, 0.1333])
 _MS_SSIM_CS = np.array([0.0448, 0.2856, 0.3001, 0.2363, 0.1333])
 
 
+def _ssim_and_cs(
+    x: torch.Tensor, y: torch.Tensor, window: torch.Tensor, data_range: float = 1.0
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Mean SSIM and mean contrast-structure term on the valid region."""
+    c = x.shape[1]
+
+    def filt(t: torch.Tensor) -> torch.Tensor:
+        return F.conv2d(t, window.to(t.dtype).expand(c, 1, -1, -1), groups=c)
+
+    mu_x, mu_y = filt(x), filt(y)
+    mu_x2, mu_y2, mu_xy = mu_x * mu_x, mu_y * mu_y, mu_x * mu_y
+    sx = filt(x * x) - mu_x2
+    sy = filt(y * y) - mu_y2
+    sxy = filt(x * y) - mu_xy
+    c1 = (0.01 * data_range) ** 2
+    c2 = (0.03 * data_range) ** 2
+    cs_map = (2 * sxy + c2) / (sx + sy + c2)
+    ssim_map = ((2 * mu_xy + c1) / (mu_x2 + mu_y2 + c1)) * cs_map
+    return ssim_map.mean(), cs_map.mean()
+
+
 def MS_SSIM(
     a: np.ndarray,
     b: np.ndarray,
@@ -201,37 +222,43 @@ def MS_SSIM(
     win_size: int = 11,
     **_: Any,
 ) -> float:
-    """Multi-scale SSIM (Wang, Simoncelli & Bovik 2003).
+    """Multi-scale SSIM (Wang, Simoncelli & Bovik 2003), standard definition:
 
-    scikit-image has no MS-SSIM, so tests/test_metrics.py validates it by its
-    defining properties instead: SSIM(x,x) == 1, values stay in [0,1], monotone
-    decrease with distortion magnitude, and symmetry in its arguments. The number
-    of levels actually used is reduced automatically when the image is too small
-    to support the requested pyramid depth.
+        MS-SSIM = l_M^{w_M} * prod_{j=1..M} cs_j^{w_j}
+
+    i.e. the contrast-structure term at every scale and the luminance term only
+    at the coarsest, combined as a weighted *product*. Negative cs values are
+    clamped to 0 (as in the widely used pytorch-msssim) so the result stays in
+    [0, 1]. The pyramid depth is reduced when the image is too small, and the
+    weights are renormalised to sum to 1 so identical images still score 1.
+
+    Corrected 2026-10-13: the previous version used the full SSIM at every level
+    and returned the *mean* of per-level products, which is not MS-SSIM.
     """
     ta, tb = _prep_pair(a, b)
+    ta, tb = ta.double(), tb.double()
 
-    # a level is only usable if the coarsest remaining scale still fits a window
     usable = levels
     while usable > 1 and min(ta.shape[-2], ta.shape[-1]) < win_size * (2 ** (usable - 1)):
         usable -= 1
-    weights = torch.tensor(_MS_SSIM_WEIGHTS[:usable], dtype=torch.float64)
-    cs = torch.tensor(_MS_SSIM_CS[:usable], dtype=torch.float64)
+    w = torch.tensor(_MS_SSIM_WEIGHTS[:usable], dtype=torch.float64)
+    w = w / w.sum()
 
-    vals = []
+    cs_vals = []
+    ssim_last = None
     for i in range(usable):
         win = _fit_window(win_size, ta.shape[-2], ta.shape[-1])
-        smap = _ssim_maps(ta, tb, _gaussian_window(win, 1.5)).clamp_min(1e-8)
-        vals.append(smap.mean())
+        s_mean, cs_mean = _ssim_and_cs(ta, tb, _gaussian_window(win, 1.5, dtype=torch.float64))
+        cs_vals.append(cs_mean.clamp_min(0.0))
+        ssim_last = s_mean.clamp_min(0.0)
         if i < usable - 1:
             ta = F.avg_pool2d(ta, kernel_size=2, stride=2)
             tb = F.avg_pool2d(tb, kernel_size=2, stride=2)
 
-    v = torch.stack(vals)  # (usable,)
-    if v.min() <= 0:
-        return 0.0
-    prod = (v[:-1] ** cs[:-1]) * (v[-1] ** weights[-1])
-    return float(prod.mean())
+    cs = torch.stack(cs_vals)
+    # coarsest scale contributes full SSIM (= l_M * cs_M); finer scales cs only
+    val = torch.prod(cs[:-1] ** w[:-1]) * (ssim_last ** w[-1])
+    return float(val.clamp(0.0, 1.0))
 
 
 # --------------------------------------------------------------------------- #

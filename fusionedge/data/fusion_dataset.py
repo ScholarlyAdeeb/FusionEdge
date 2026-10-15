@@ -211,6 +211,9 @@ def build_dataloaders(
     limit_train: int | None = None,
     limit_eval: int | None = None,
     persistent_workers: bool | None = None,
+    holdout_frac: float = 0.0,
+    holdout_seed: int = 0,
+    loader_seed: int = 0,
 ) -> tuple[DataLoader, DataLoader, dict[str, Any]]:
     """Build train/eval loaders plus the registry record describing the data.
 
@@ -221,10 +224,28 @@ def build_dataloaders(
     rec = load_registry(dataset_id)
     root = Path(rec["root"])
 
-    train_set = FusionPairDataset(
-        root, train_split, crop=crop, augment=augment, limit=limit_train
-    )
-    eval_set = FusionPairDataset(root, eval_split, crop=None, augment=False, limit=limit_eval)
+    if holdout_frac and holdout_frac > 0:
+        # Model-selection split carved out of TRAIN, so the published test split
+        # (`eval_split`) is never looked at during training. See split_holdout.
+        all_train = FusionPairDataset(root, train_split, crop=None, augment=False)
+        ids = [r.pair_id for r in all_train.pairs]
+        fit_ids, hold_ids = split_holdout(ids, holdout_frac, holdout_seed)
+        # The manifest always records the FULL protocol split; limits (smoke runs)
+        # only select subsets of it and are recorded separately.
+        man = holdout_manifest(fit_ids, hold_ids, holdout_frac, holdout_seed, train_split)
+        used_fit = fit_ids[:limit_train] if limit_train is not None else fit_ids
+        used_hold = hold_ids[:limit_eval] if limit_eval is not None else hold_ids
+        man["used"] = {"n_fit": len(used_fit), "n_holdout": len(used_hold),
+                       "limited": limit_train is not None or limit_eval is not None}
+        train_set = FusionPairDataset(root, train_split, crop=crop, augment=augment, pairs=used_fit)
+        eval_set = FusionPairDataset(root, train_split, crop=None, augment=False, pairs=used_hold)
+        rec = dict(rec)
+        rec["holdout"] = man
+    else:
+        train_set = FusionPairDataset(
+            root, train_split, crop=crop, augment=augment, limit=limit_train
+        )
+        eval_set = FusionPairDataset(root, eval_split, crop=None, augment=False, limit=limit_eval)
 
     if persistent_workers is None:
         persistent_workers = num_workers > 0
@@ -237,7 +258,12 @@ def build_dataloaders(
         pin_memory=pin_memory,
         drop_last=len(train_set) > batch_size,
         worker_init_fn=worker_init_fn(None),
-        generator=torch.Generator().manual_seed(0),
+        # The loader generator fixes the shuffle order AND, through the per-worker
+        # base seeds it hands out, every random crop/flip. It used to be a constant
+        # 0, so with num_workers > 0 two runs with different `seed`s saw identical
+        # batches and differed only in weight init. `data.loader_seed` (default 0,
+        # which reproduces every earlier run) is set per seed for the repeats.
+        generator=torch.Generator().manual_seed(int(loader_seed)),
         persistent_workers=persistent_workers,
     )
     eval_loader = DataLoader(
@@ -250,3 +276,43 @@ def build_dataloaders(
         persistent_workers=False,
     )
     return train_loader, eval_loader, rec
+
+def split_holdout(ids: list[str], frac: float, seed: int = 0) -> tuple[list[str], list[str]]:
+    """Deterministically split pair ids into (fit, holdout).
+
+    Order-independent: each id is ranked by sha1(f"{seed}:{id}"), and the lowest
+    round(frac * n) ids are held out. The same ids and seed always give the same
+    split, on any machine, regardless of directory listing order.
+    """
+    import hashlib
+
+    if not 0.0 < frac < 1.0:
+        raise ValueError(f"holdout_frac must be in (0, 1), got {frac}")
+    uniq = sorted(set(ids))
+    if len(uniq) != len(ids):
+        raise ValueError("duplicate pair ids; refusing to split")
+    n_hold = max(1, int(round(frac * len(uniq))))
+    ranked = sorted(uniq, key=lambda i: hashlib.sha1(f"{seed}:{i}".encode()).hexdigest())
+    hold = set(ranked[:n_hold])
+    return [i for i in uniq if i not in hold], sorted(hold)
+
+
+def holdout_manifest(fit_ids, hold_ids, frac, seed, split) -> dict[str, Any]:
+    """Provenance for the holdout: counts + SHA-256 over each ordered id list."""
+    import hashlib
+
+    def h(xs):
+        return hashlib.sha256("\n".join(xs).encode()).hexdigest()
+
+    if set(fit_ids) & set(hold_ids):
+        raise AssertionError("holdout overlaps the fitting set")
+    return {
+        "source_split": split,
+        "frac": frac,
+        "seed": seed,
+        "n_fit": len(fit_ids),
+        "n_holdout": len(hold_ids),
+        "fit_sha256": h(list(fit_ids)),
+        "holdout_sha256": h(list(hold_ids)),
+        "holdout_ids": list(hold_ids),
+    }

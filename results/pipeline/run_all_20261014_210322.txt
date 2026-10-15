@@ -1,0 +1,18 @@
+﻿21:03:22  FusionEdge pipeline 20261014_210322  root=D:\Projects\Sam
+21:03:22  python: C:\Python314\python.exe  Python 3.14.5
+21:03:22  pytest -> D:\Projects\Sam\results\pipeline\pytest_20261014_210322.txt
+21:03:59  tests: 365 passed, 2 warnings in 33.98s
+21:03:59  dashboard window started (sweep overview)
+21:03:59  [baseline_simplecnn_v5_ycbcr] training (configs\baseline.yaml)
+21:48:33  [baseline_simplecnn_v5_ycbcr] run_experiment exit 0 after 44.6 min
+21:48:51  [baseline_simplecnn_v5_ycbcr] audit=PASS check=FAIL
+21:48:51      [FAIL] loss decreased >=10% (tail5 vs ep0) 7.1938 -> 6.8512 (+4.8%)
+21:48:51      [FAIL] saturation < 5%                    0.2925
+21:48:51      [FAIL] corr(fused, ir) > 0 (mean)         -0.142
+21:48:51      [FAIL] corr(fused, vi) > 0 (mean)         -0.610
+21:48:51      [FAIL] carries IR beyond visible          corr(f,ir)=-0.142 vs corr(vi,ir)=0.056 (need +0.05)
+21:48:51  STOP: baseline failed its acceptance gate; FusionEdge not started (protocol).
+21:48:51  tables -> results\tables.md (exit 0)
+21:48:51  ==== SUMMARY ====
+21:48:51    baseline_simplecnn_v5_ycbcr: checks FAIL
+21:48:51  pipeline finished. Log: D:\Projects\Sam\results\pipeline\run_all_20261014_210322.txt

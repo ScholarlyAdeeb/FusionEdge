@@ -1,0 +1,12 @@
+﻿FusionEdge launch 20261013_010130
+root=D:\Projects\Sam config=configs\baseline.yaml run=baseline_simplecnn_v4 stop=True skipTests=False noTrain=False
+python: C:\Python314\python.exe  Python 3.14.5
+no run_experiment.py process running
+== pytest (output: D:\Projects\Sam\results\recovery\pytest_20261013_010130.txt) ==
+pytest exit code: 0
+  
+  -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+  361 passed, 2 warnings in 27.36s
+launching training window: baseline_simplecnn_v4
+launching dashboard window
+launched.

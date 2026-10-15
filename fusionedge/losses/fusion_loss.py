@@ -190,6 +190,21 @@ class FusionLossConfig:
         return cls(**d)
 
 
+def fp32_loss(loss_fn, fused: torch.Tensor, ir: torch.Tensor, vi: torch.Tensor):
+    """Evaluate `loss_fn` in genuine float32, even if called inside an autocast block.
+
+    Casting the *inputs* with `.float()` is not enough: autocast re-casts every
+    conv2d inside the loss (Sobel, SSIM Gaussian) back to bf16/fp16. SSIM's
+    variance E[x^2] - mu^2 then suffers catastrophic cancellation, and the
+    gradients of these ops are corrupted -- NaN on CPU, finite-but-wrong on CUDA.
+    Measured 2026-10-14: the same baseline trained 300 steps reaches intensity
+    L1 0.032 with the loss in fp32, and NaN with the loss inside bf16 autocast.
+    All GPU baseline runs up to v5 trained under the corrupted loss.
+    """
+    with torch.autocast(device_type=fused.device.type, enabled=False):
+        return loss_fn(fused.float(), ir.float(), vi.float())
+
+
 class FusionLoss(nn.Module):
     """Weighted sum of the fusion loss terms.
 

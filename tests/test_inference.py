@@ -118,7 +118,7 @@ def test_untrained_model_reproduces_the_visible_image(real_pair_dirs):
     """The exact behaviour that makes unguarded inference misleading: with the
     zero-initialised head, the 'fusion' is just the visible input."""
     ir_dir, vi_dir = real_pair_dirs
-    model = build_model("fusionedge", {"width": 8, "depth": 1}).eval()
+    model = build_model("fusionedge", {"width": 8, "depth": 1, "residual_mode": "add"}).eval()
     fused = fuse_pair(model, ir_dir / "scene0.png", vi_dir / "scene0.png",
                       device="cpu", amp=False)
     visible = np.asarray(Image.open(vi_dir / "scene0.png").convert("RGB"))

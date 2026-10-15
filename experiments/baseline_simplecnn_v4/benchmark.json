@@ -1,0 +1,50 @@
+{
+  "model": "baseline",
+  "params": 13667,
+  "params_all": 13667,
+  "checkpoint_mb": 0.225,
+  "latency": [
+    {
+      "size": [
+        128,
+        128
+      ],
+      "batch_size": 1,
+      "iters": 200,
+      "warmup_iters": 50,
+      "warmup_s": 0.639,
+      "latency_ms_median": 1.665,
+      "latency_ms_mean": 2.1202,
+      "latency_ms_p95": 3.9025,
+      "latency_ms_min": 0.9462,
+      "fps": 600.59,
+      "amp": false,
+      "device": "cuda",
+      "peak_vram_mb": 10.78,
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU"
+    },
+    {
+      "size": [
+        480,
+        640
+      ],
+      "batch_size": 1,
+      "iters": 200,
+      "warmup_iters": 50,
+      "warmup_s": 0.967,
+      "latency_ms_median": 17.1551,
+      "latency_ms_mean": 17.1752,
+      "latency_ms_p95": 17.1745,
+      "latency_ms_min": 17.1305,
+      "fps": 58.29,
+      "amp": false,
+      "device": "cuda",
+      "peak_vram_mb": 198.04,
+      "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU"
+    }
+  ],
+  "torch": "2.12.1+cu126",
+  "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "run_name": "baseline_simplecnn_v4",
+  "dataset_id": "MSRS"
+}

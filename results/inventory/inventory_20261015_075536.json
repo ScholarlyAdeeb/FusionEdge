@@ -1,0 +1,334 @@
+{
+  "generated": "20261015_075536",
+  "runs": [
+    {
+      "id": "baseline_simplecnn_inject",
+      "dir": "experiments/baseline_simplecnn_inject",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4,
+        "output_space": "inject"
+      },
+      "seed": 1234,
+      "loader_seed": 0,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 34.3,
+      "best_epoch": 4,
+      "best_metric": 0.48792428957950085,
+      "last_pt": "experiments/baseline_simplecnn_inject/checkpoints/last.pt",
+      "params": 13089,
+      "latency_ms_480x640": 16.9165,
+      "peak_vram_mb_480x640": 198.53,
+      "test_evaluated": true,
+      "gate": true,
+      "audit": true,
+      "status": "accepted",
+      "note": ""
+    },
+    {
+      "id": "baseline_simplecnn_inject_s1235",
+      "dir": "experiments/baseline_simplecnn_inject_s1235",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4,
+        "output_space": "inject"
+      },
+      "seed": 1235,
+      "loader_seed": 1235,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 36.3,
+      "best_epoch": 4,
+      "best_metric": 0.4874989487440771,
+      "last_pt": "experiments/baseline_simplecnn_inject_s1235/checkpoints/last.pt",
+      "params": 13089,
+      "latency_ms_480x640": 16.9216,
+      "peak_vram_mb_480x640": 198.53,
+      "test_evaluated": true,
+      "gate": true,
+      "audit": true,
+      "status": "accepted",
+      "note": ""
+    },
+    {
+      "id": "baseline_simplecnn_inject_s1236",
+      "dir": "experiments/baseline_simplecnn_inject_s1236",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4,
+        "output_space": "inject"
+      },
+      "seed": 1236,
+      "loader_seed": 1236,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 41.1,
+      "best_epoch": 4,
+      "best_metric": 0.4880228882789773,
+      "last_pt": "experiments/baseline_simplecnn_inject_s1236/checkpoints/last.pt",
+      "params": 13089,
+      "latency_ms_480x640": 16.9144,
+      "peak_vram_mb_480x640": 198.53,
+      "test_evaluated": true,
+      "gate": true,
+      "audit": true,
+      "status": "accepted",
+      "note": ""
+    },
+    {
+      "id": "baseline_simplecnn_v3_bf16",
+      "dir": "experiments/baseline_simplecnn_v3_bf16",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4
+      },
+      "seed": 1234,
+      "loader_seed": 0,
+      "epochs_cfg": 60,
+      "epochs_done": 7,
+      "train_minutes": 18.3,
+      "best_epoch": null,
+      "best_metric": 0.5450111983426214,
+      "last_pt": "experiments/baseline_simplecnn_v3_bf16/checkpoints/last.pt",
+      "test_evaluated": false,
+      "gate": null,
+      "audit": null,
+      "status": "superseded",
+      "note": "Status: stopped deliberately on 2026-10-13 (~00:50 IST) during recovery, at"
+    },
+    {
+      "id": "baseline_simplecnn_v4",
+      "dir": "experiments/baseline_simplecnn_v4",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4
+      },
+      "seed": 1234,
+      "loader_seed": 0,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 32.2,
+      "best_epoch": 9,
+      "best_metric": 0.5358654255738882,
+      "last_pt": "experiments/baseline_simplecnn_v4/checkpoints/last.pt",
+      "params": 13667,
+      "latency_ms_480x640": 17.1551,
+      "peak_vram_mb_480x640": 198.04,
+      "test_evaluated": true,
+      "gate": false,
+      "audit": true,
+      "status": "superseded",
+      "note": "superseded by baseline_simplecnn_v5_ycbcr: false colour, see NOTES.md"
+    },
+    {
+      "id": "baseline_simplecnn_v5_ycbcr",
+      "dir": "experiments/baseline_simplecnn_v5_ycbcr",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4,
+        "output_space": "y"
+      },
+      "seed": 1234,
+      "loader_seed": 0,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 36.5,
+      "best_epoch": 29,
+      "best_metric": 0.28556982838916406,
+      "last_pt": "experiments/baseline_simplecnn_v5_ycbcr/checkpoints/last.pt",
+      "params": 13089,
+      "latency_ms_480x640": 16.6892,
+      "peak_vram_mb_480x640": 198.53,
+      "test_evaluated": true,
+      "gate": false,
+      "audit": true,
+      "status": "superseded",
+      "note": "superseded by baseline_simplecnn_v6: loss computed under bf16 autocast, see NOTES.md"
+    },
+    {
+      "id": "baseline_simplecnn_v6",
+      "dir": "experiments/baseline_simplecnn_v6",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4,
+        "output_space": "y"
+      },
+      "seed": 1234,
+      "loader_seed": 0,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 43.9,
+      "best_epoch": 54,
+      "best_metric": 0.5095135366242931,
+      "last_pt": "experiments/baseline_simplecnn_v6/checkpoints/last.pt",
+      "params": 13089,
+      "latency_ms_480x640": 16.6636,
+      "peak_vram_mb_480x640": 198.53,
+      "test_evaluated": true,
+      "gate": true,
+      "audit": true,
+      "status": "accepted",
+      "note": ""
+    },
+    {
+      "id": "fusionedge_main",
+      "dir": "experiments/fusionedge_main",
+      "model": "fusionedge",
+      "model_cfg": {
+        "width": 32,
+        "depth": 2,
+        "residual_mode": "inject"
+      },
+      "seed": 1234,
+      "loader_seed": 0,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 45.2,
+      "best_epoch": 4,
+      "best_metric": 0.48307462253112754,
+      "last_pt": "experiments/fusionedge_main/checkpoints/last.pt",
+      "params": 22339,
+      "latency_ms_480x640": 46.976,
+      "peak_vram_mb_480x640": 453.51,
+      "test_evaluated": true,
+      "gate": true,
+      "audit": true,
+      "status": "accepted",
+      "note": ""
+    },
+    {
+      "id": "fusionedge_main_s1235",
+      "dir": "experiments/fusionedge_main_s1235",
+      "model": "fusionedge",
+      "model_cfg": {
+        "width": 32,
+        "depth": 2,
+        "residual_mode": "inject"
+      },
+      "seed": 1235,
+      "loader_seed": 1235,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 47.0,
+      "best_epoch": 4,
+      "best_metric": 0.4722040155944518,
+      "last_pt": "experiments/fusionedge_main_s1235/checkpoints/last.pt",
+      "params": 22339,
+      "latency_ms_480x640": 46.9647,
+      "peak_vram_mb_480x640": 453.51,
+      "test_evaluated": true,
+      "gate": true,
+      "audit": true,
+      "status": "accepted",
+      "note": ""
+    },
+    {
+      "id": "fusionedge_main_s1236",
+      "dir": "experiments/fusionedge_main_s1236",
+      "model": "fusionedge",
+      "model_cfg": {
+        "width": 32,
+        "depth": 2,
+        "residual_mode": "inject"
+      },
+      "seed": 1236,
+      "loader_seed": 1236,
+      "epochs_cfg": 60,
+      "epochs_done": 60,
+      "train_minutes": 47.5,
+      "best_epoch": 4,
+      "best_metric": 0.47839180473563686,
+      "last_pt": "experiments/fusionedge_main_s1236/checkpoints/last.pt",
+      "params": 22339,
+      "latency_ms_480x640": 46.8941,
+      "peak_vram_mb_480x640": 453.51,
+      "test_evaluated": true,
+      "gate": true,
+      "audit": true,
+      "status": "accepted",
+      "note": ""
+    },
+    {
+      "id": "baseline_clamp_bug",
+      "dir": "experiments/_failed/baseline_clamp_bug",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4
+      },
+      "seed": 1234,
+      "loader_seed": 0,
+      "epochs_cfg": 60,
+      "epochs_done": 3,
+      "train_minutes": 7.0,
+      "best_epoch": null,
+      "best_metric": 0.4823815187551667,
+      "last_pt": "experiments/_failed/baseline_clamp_bug/checkpoints/last.pt",
+      "test_evaluated": false,
+      "gate": null,
+      "audit": null,
+      "status": "failed",
+      "note": "Status: INVALID. Superseded by `experiments/baseline_simplecnn_v2_sigmoid/`."
+    },
+    {
+      "id": "baseline_fp16_amp",
+      "dir": "experiments/_failed/baseline_fp16_amp",
+      "model": "baseline",
+      "model_cfg": {
+        "width": 32,
+        "depth": 4
+      },
+      "seed": 1234,
+      "loader_seed": 0,
+      "epochs_cfg": 60,
+      "epochs_done": 5,
+      "train_minutes": 12.8,
+      "best_epoch": null,
+      "best_metric": 0.5313085593005413,
+      "last_pt": "experiments/_failed/baseline_fp16_amp/checkpoints/last.pt",
+      "test_evaluated": false,
+      "gate": null,
+      "audit": null,
+      "status": "failed",
+      "note": "previously experiments/baseline_simplecnn_v2_sigmoid (moved, not deleted); Status: INVALID. Superseded by `experiments/baseline_simplecnn_v3_bf16/`."
+    }
+  ],
+  "pending": [
+    {
+      "id": "ablation_avg_fusion",
+      "config": "configs/ablation_avg_fusion.yaml"
+    },
+    {
+      "id": "ablation_dense_conv",
+      "config": "configs/ablation_dense_conv.yaml"
+    },
+    {
+      "id": "ablation_no_cross",
+      "config": "configs/ablation_no_cross.yaml"
+    },
+    {
+      "id": "ablation_no_edge",
+      "config": "configs/ablation_no_edge.yaml"
+    },
+    {
+      "id": "ablation_no_se",
+      "config": "configs/ablation_no_se.yaml"
+    },
+    {
+      "id": "ablation_direct_y_head",
+      "config": "configs/ablation_rgb_head.yaml"
+    },
+    {
+      "id": "ablation_unshared_stem",
+      "config": "configs/ablation_unshared_stem.yaml"
+    }
+  ]
+}

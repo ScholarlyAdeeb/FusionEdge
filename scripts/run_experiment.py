@@ -111,8 +111,14 @@ def main() -> int:
     if not args.skip_train:
         trainer = Trainer(cfg, run_dir, registry=registry, device=device,
                           argv=sys.argv)
-        trainer.fit()
-        weights = run_dir / "checkpoints" / "best.pt"
+        trainer.fit(resume_from=args.resume)
+        # Which checkpoint is reported is a protocol decision fixed in the config,
+        # not chosen after looking at results. `last` = fixed training budget,
+        # identical for every model; `best` = selected on the validation split.
+        final = str(cfg.get("train", {}).get("final_weights", "best")).lower()
+        if final not in ("best", "last"):
+            raise SystemExit(f"train.final_weights must be best|last, got {final!r}")
+        weights = run_dir / "checkpoints" / f"{final}.pt"
         if not weights.exists():
             weights = run_dir / "checkpoints" / "last.pt"
     else:
@@ -146,6 +152,14 @@ def main() -> int:
         max_images=cfg.get("train", {}).get("eval_max_images"),
     )
     payload["smoke"] = smoke
+    payload["protocol"] = {
+        "final_weights": str(weights),
+        "eval_split": eval_split,
+        "selection_split": (
+            "holdout of train" if float(cfg.get("data", {}).get("holdout_frac", 0) or 0) > 0
+            else eval_split
+        ),
+    }
     (run_dir / "metrics.json").write_text(json.dumps(payload, indent=2))
 
     print(f"\nheld-out metrics ({reg2['dataset_id']}, n={payload['evaluation']['num_images']}):")

@@ -5,7 +5,7 @@
 # image by construction beats asking the network to invent colour.
 _base_: default.yaml
 
-run_name: ablation_rgb_head
+run_name: ablation_direct_y_head
 
 model:
   name: fusionedge
@@ -13,3 +13,5 @@ model:
     width: 32
     depth: 2
     residual_output: false
+    output_space: y           # direct sigmoid luminance + visible chroma, same output space as
+                              # the baseline; isolates the residual parameterisation only

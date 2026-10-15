@@ -47,3 +47,18 @@ htmlcov/
 # --- OS ---
 .DS_Store
 Thumbs.db
+# --- pytest console logs saved by the Windows launchers: they contain the local
+# user's temp path; each pipeline log keeps the pass/fail summary line ---
+results/**/pytest_*.txt
+
+# --- release hygiene (2026-10-15): kept on disk, not published ---
+# pre-flight smoke-run scratch; each pre-flight's verdict is in results/preflight/*.json
+experiments/_preflight/
+# console copies of pre-flight output saved by the launchers (contain the local
+# user's Python site-packages path); results/preflight/ holds the canonical record
+results/*/preflight_2*.txt
+# stale make_figures table (superseded v5 run only); docs/RESULTS.md replaces it
+results/tables.md
+
+# --- local acquisition log containing the local user's home path (untracked 2026-10-15; kept on disk) ---
+data/_mfnet_retry.log

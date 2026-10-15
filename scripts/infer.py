@@ -2,12 +2,17 @@
 """Single-pair inference CLI.
 
     python scripts/infer.py --ir ir.png --vi vi.png \
-        --weights experiments/fusionedge_main/checkpoints/best.pt \
+        --weights experiments/fusionedge_main/checkpoints/last.pt \
         --out results/fused.png
 
-Refuses to run on weights that look untrained: an untrained FusionEdge returns the
-visible image unchanged, which looks like a plausible fusion but carries no
-infrared information. See fusionedge/engine/infer.py for the full guard.
+    python scripts/infer.py --run experiments/fusionedge_main --fp32 \
+        --ir data/MSRS/canonical/train/ir/00096D.png \
+        --vi data/MSRS/canonical/train/vi/00096D.png --out results/demo/fused.png
+
+`--run` loads that experiment's model config and `checkpoints/last.pt` (the
+protocol's reported checkpoint). Refuses weights that look untrained: an
+untrained model returns a fixed, unlearned blend that looks plausible. See
+fusionedge/engine/infer.py for the full guard.
 """
 
 from __future__ import annotations

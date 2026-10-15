@@ -41,6 +41,8 @@ def save_checkpoint(
     *,
     optimizer: torch.optim.Optimizer | None = None,
     scaler: Any = None,
+    scheduler: Any = None,
+    best_epoch: int | None = None,
     epoch: int = 0,
     global_step: int = 0,
     best_metric: float | None = None,
@@ -58,6 +60,7 @@ def save_checkpoint(
         "epoch": epoch,
         "global_step": global_step,
         "best_metric": best_metric,
+        "best_epoch": best_epoch,
         "config": config or {},
         "metrics": metrics or {},
     }
@@ -65,6 +68,8 @@ def save_checkpoint(
         payload["optimizer_state"] = optimizer.state_dict()
     if scaler is not None:
         payload["scaler_state"] = scaler.state_dict()
+    if scheduler is not None:
+        payload["scheduler_state"] = scheduler.state_dict()
     if include_rng:
         payload["rng_state"] = rng_state()
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -81,6 +86,8 @@ def load_checkpoint(
     scaler: Any = None,
     map_location: str | torch.device = "cpu",
     load_optimizer: bool = True,
+    scheduler: Any = None,
+    restore_rng: bool = False,
 ) -> dict[str, Any]:
     """Load a checkpoint. Returns the full payload for inspection."""
     payload = torch.load(path, map_location=map_location, weights_only=False)
@@ -97,6 +104,17 @@ def load_checkpoint(
         optimizer.load_state_dict(payload["optimizer_state"])
     if scaler is not None and load_optimizer and "scaler_state" in payload:
         scaler.load_state_dict(payload["scaler_state"])
+    if scheduler is not None and load_optimizer and "scheduler_state" in payload:
+        scheduler.load_state_dict(payload["scheduler_state"])
+    if restore_rng and payload.get("rng_state") is not None:
+        st = payload["rng_state"]
+        # torch.load(map_location=cuda) moves RNG ByteTensors to the GPU; the
+        # setters require CPU tensors.
+        if hasattr(st.get("torch"), "cpu"):
+            st["torch"] = st["torch"].cpu()
+        if st.get("cuda") is not None:
+            st["cuda"] = [t.cpu() for t in st["cuda"]]
+        load_rng_state(st)
     return payload
 
 

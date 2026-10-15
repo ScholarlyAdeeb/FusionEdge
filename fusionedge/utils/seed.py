@@ -41,11 +41,18 @@ def seed_everything(seed: int, deterministic: bool = True) -> None:
     if deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+        # PyTorch enables TF32 for cuDNN convs by default (Ampere+), so "fp32"
+        # convs silently ran at a 10-bit mantissa: ~2e-3 output gaps between
+        # memory layouts, and a less-than-fp32 loss (Sobel/SSIM are convs).
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_tf32 = False
         os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
         torch.use_deterministic_algorithms(True, warn_only=True)
     else:
         torch.backends.cudnn.deterministic = False
         torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cuda.matmul.allow_tf32 = True
         torch.use_deterministic_algorithms(False)
 
 
